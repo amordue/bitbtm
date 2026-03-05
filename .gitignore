@@ -11,3 +11,6 @@ wheels/
 
 # Secret .env file
 .env
+
+# sqlite database file
+bitbt.db
