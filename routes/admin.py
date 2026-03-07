@@ -43,12 +43,24 @@ from fasthtml.common import (
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
+from admin_roster import (
+    active_event_robots,
+    active_robot_count,
+    event_robot_entry,
+    ordered_event_phases,
+    ordered_sub_events,
+    qualifying_phases,
+    renumber_reserves,
+    reserve_event_robots,
+    round_one_complete,
+)
 from auth import get_valid_access_token, require_organizer
 from config import UPLOAD_DIR
 from database import get_db
 from event_imports import (
     import_selected_event_registrations,
     load_registrations,
+    next_reserve_order,
     refresh_event_registrations,
 )
 from google_sheets import fetch_sheet_rows
@@ -423,22 +435,11 @@ def event_detail(
         flash = Div(text, cls=f"alert alert-{kind}")
 
     # Active robots and reserves
-    active_ers = (
-        db.query(EventRobot)
-        .filter(EventRobot.event_id == event_id, EventRobot.is_reserve == False)
-        .join(Robot)
-        .order_by(Robot.robot_name)
-        .all()
-    )
-    reserve_ers = (
-        db.query(EventRobot)
-        .filter(EventRobot.event_id == event_id, EventRobot.is_reserve == True)
-        .order_by(EventRobot.reserve_order.asc().nullslast(), EventRobot.id)
-        .all()
-    )
+    active_ers = active_event_robots(event_id, db)
+    reserve_ers = reserve_event_robots(event_id, db)
 
     # Phases
-    phases = db.query(Phase).filter(Phase.event_id == event_id).order_by(Phase.phase_number).all()
+    phases = ordered_event_phases(event_id, db)
 
     # --- Event header card ---
     next_status = _NEXT_STATUS.get(ev.status)
@@ -527,7 +528,7 @@ def event_detail(
 
     # --- Phases card ---
     # ---- Phase 5: qualifying actions / bracket generation ----
-    qual_phases = [ph for ph in phases if ph.phase_type == PhaseType.qualifying]
+    qual_phases = qualifying_phases(phases)
     bracket_phase = next((ph for ph in phases if ph.phase_type == PhaseType.bracket), None)
     num_complete_qual = sum(1 for ph in qual_phases if ph.status == PhaseStatus.complete)
 
@@ -608,18 +609,10 @@ def event_detail(
     )
 
     # --- Sub-events card ---
-    sub_events = (
-        db.query(SubEvent)
-        .filter(SubEvent.event_id == event_id)
-        .order_by(SubEvent.id)
-        .all()
-    )
+    sub_events = ordered_sub_events(event_id, db)
 
     # Show "Create Sub-event" button when bracket round 1 is complete (or event in sub_events)
-    r1_done = False
-    if bracket_phase:
-        r1_matchups = [m for m in bracket_phase.matchups if m.bracket_round == 1]
-        r1_done = bool(r1_matchups) and all(m.status == MatchupStatus.completed for m in r1_matchups)
+    r1_done = round_one_complete(bracket_phase)
 
     can_create_sub_event = r1_done or ev.status in (EventStatus.sub_events, EventStatus.complete)
 
@@ -1040,11 +1033,7 @@ def transition_phase(
         return RedirectResponse(f"/admin/events/{event_id}", status_code=303)
 
     if ev.status == EventStatus.registration:
-        active_count = (
-            db.query(EventRobot)
-            .filter(EventRobot.event_id == event_id, EventRobot.is_reserve == False)
-            .count()
-        )
+        active_count = active_robot_count(event_id, db)
         if active_count < 2:
             return RedirectResponse(
                 f"/admin/events/{event_id}?msg=error"
@@ -1189,13 +1178,7 @@ def add_robot(
 
     res_order = None
     if flag_reserve:
-        max_res = (
-            db.query(EventRobot.reserve_order)
-            .filter(EventRobot.event_id == event_id, EventRobot.is_reserve == True)
-            .order_by(EventRobot.reserve_order.desc().nullslast())
-            .first()
-        )
-        res_order = (max_res[0] or 0) + 1 if max_res else 1
+        res_order = next_reserve_order(event_id, db)
 
     db.add(EventRobot(
         event_id=event_id,
@@ -1216,7 +1199,7 @@ def remove_robot(
     db: Session = Depends(get_db),
 ):
     _get_event_or_404(event_id, user.id, db)
-    er = db.query(EventRobot).filter(EventRobot.id == er_id, EventRobot.event_id == event_id).first()
+    er = event_robot_entry(event_id, er_id, db)
     if er:
         db.delete(er)
         db.commit()
@@ -1237,16 +1220,10 @@ def set_reserve(
     db: Session = Depends(get_db),
 ):
     _get_event_or_404(event_id, user.id, db)
-    er = db.query(EventRobot).filter(EventRobot.id == er_id, EventRobot.event_id == event_id).first()
+    er = event_robot_entry(event_id, er_id, db)
     if er and not er.is_reserve:
-        max_res = (
-            db.query(EventRobot.reserve_order)
-            .filter(EventRobot.event_id == event_id, EventRobot.is_reserve == True)
-            .order_by(EventRobot.reserve_order.desc().nullslast())
-            .first()
-        )
         er.is_reserve = True
-        er.reserve_order = (max_res[0] or 0) + 1 if max_res else 1
+        er.reserve_order = next_reserve_order(event_id, db)
         db.commit()
     return RedirectResponse(f"/admin/events/{event_id}?msg=reserve_toggled", status_code=303)
 
@@ -1260,12 +1237,12 @@ def unset_reserve(
     db: Session = Depends(get_db),
 ):
     _get_event_or_404(event_id, user.id, db)
-    er = db.query(EventRobot).filter(EventRobot.id == er_id, EventRobot.event_id == event_id).first()
+    er = event_robot_entry(event_id, er_id, db)
     if er and er.is_reserve:
         er.is_reserve = False
         er.reserve_order = None
         db.flush()
-        _renumber_reserves(event_id, db)
+        renumber_reserves(event_id, db)
         db.commit()
     return RedirectResponse(f"/admin/events/{event_id}?msg=reserve_toggled", status_code=303)
 
@@ -1280,16 +1257,11 @@ def move_reserve(
     db: Session = Depends(get_db),
 ):
     _get_event_or_404(event_id, user.id, db)
-    er = db.query(EventRobot).filter(EventRobot.id == er_id, EventRobot.event_id == event_id).first()
+    er = event_robot_entry(event_id, er_id, db)
     if not er or not er.is_reserve:
         return RedirectResponse(f"/admin/events/{event_id}", status_code=303)
 
-    all_reserves = (
-        db.query(EventRobot)
-        .filter(EventRobot.event_id == event_id, EventRobot.is_reserve == True)
-        .order_by(EventRobot.reserve_order.asc().nullslast(), EventRobot.id)
-        .all()
-    )
+    all_reserves = reserve_event_robots(event_id, db)
     idx = next((i for i, r in enumerate(all_reserves) if r.id == er_id), None)
     if idx is None:
         return RedirectResponse(f"/admin/events/{event_id}", status_code=303)
@@ -1310,18 +1282,6 @@ def move_reserve(
     return RedirectResponse(f"/admin/events/{event_id}?msg=reserve_moved", status_code=303)
 
 
-def _renumber_reserves(event_id: int, db: Session) -> None:
-    """Re-number reserve_order values to be contiguous after a removal."""
-    reserves = (
-        db.query(EventRobot)
-        .filter(EventRobot.event_id == event_id, EventRobot.is_reserve == True)
-        .order_by(EventRobot.reserve_order.asc().nullslast(), EventRobot.id)
-        .all()
-    )
-    for i, r in enumerate(reserves, start=1):
-        r.reserve_order = i
-
-
 # ---------------------------------------------------------------------------
 # 9. Reserve swap / robot retirement
 # ---------------------------------------------------------------------------
@@ -1337,18 +1297,13 @@ def retire_form(
     error: str = Query(default=""),
 ):
     ev = _get_event_or_404(event_id, user.id, db)
-    er = db.query(EventRobot).filter(EventRobot.id == er_id, EventRobot.event_id == event_id).first()
+    er = event_robot_entry(event_id, er_id, db)
     if not er:
         return RedirectResponse(f"/admin/events/{event_id}", status_code=303)
 
     robot: Robot = er.robot
-    phases = db.query(Phase).filter(Phase.event_id == event_id).order_by(Phase.phase_number).all()
-    reserves = (
-        db.query(EventRobot)
-        .filter(EventRobot.event_id == event_id, EventRobot.is_reserve == True)
-        .order_by(EventRobot.reserve_order.asc().nullslast())
-        .all()
-    )
+    phases = ordered_event_phases(event_id, db)
+    reserves = reserve_event_robots(event_id, db)
 
     err_el = Div(error, cls="alert alert-error") if error else ""
 
@@ -1437,7 +1392,7 @@ def retire_robot(
     reserve_er_id: str = Form(default=""),
 ):
     ev = _get_event_or_404(event_id, user.id, db)
-    er = db.query(EventRobot).filter(EventRobot.id == er_id, EventRobot.event_id == event_id).first()
+    er = event_robot_entry(event_id, er_id, db)
     if not er:
         return RedirectResponse(f"/admin/events/{event_id}", status_code=303)
 
@@ -1457,7 +1412,7 @@ def retire_robot(
         if reserve_er:
             reserve_er.is_reserve = False
             reserve_er.reserve_order = None
-            _renumber_reserves(event_id, db)
+            renumber_reserves(event_id, db)
             replacement_robot_id = reserve_er.robot_id
 
     retirement = RobotRetirement(
