@@ -64,12 +64,14 @@ from models import (
     PhaseType,
     Result,
     Robot,
+    RunOrder,
+    RunOrderMatchupType,
     Roboteer,
     SubEvent,
     SubEventMatchup,
     SubEventTeam,
 )
-from scoring import BYE_POINTS
+from scoring import BYE_POINTS, points_to_outcome_label
 
 router = APIRouter(prefix="/events")
 
@@ -202,6 +204,153 @@ tr:last-child td { border-bottom: none; }
     font-size: 0.82rem; color: #888; word-break: break-all; text-align: center;
     max-width: 360px;
 }
+.auto-panel {
+    transition: opacity 0.2s ease;
+}
+.htmx-request.auto-panel { opacity: 0.65; }
+.stat-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 0.8rem;
+}
+.stat-tile {
+    background: linear-gradient(180deg, #181818 0%, #131313 100%);
+    border: 1px solid #262626;
+    border-radius: 8px;
+    padding: 0.9rem;
+}
+.stat-label {
+    color: #777;
+    font-size: 0.74rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin-bottom: 0.35rem;
+}
+.stat-value {
+    font-size: 1.45rem;
+    font-weight: 700;
+    color: #f8fafc;
+}
+.stat-meta { color: #60a5fa; font-size: 0.8rem; margin-top: 0.2rem; }
+.stack { display: flex; flex-direction: column; gap: 1rem; }
+.history-item {
+    border: 1px solid #252525;
+    border-radius: 8px;
+    padding: 0.95rem 1rem;
+    background: #171717;
+}
+.history-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.55rem;
+    margin-bottom: 0.55rem;
+    align-items: center;
+}
+.history-title {
+    display: flex;
+    justify-content: space-between;
+    gap: 1rem;
+    align-items: baseline;
+    flex-wrap: wrap;
+}
+.history-score { font-weight: 700; color: #f8fafc; }
+.live-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1.4fr) minmax(320px, 1fr);
+    gap: 1rem;
+}
+.live-stage {
+    background:
+        radial-gradient(circle at top left, rgba(96, 165, 250, 0.18), transparent 32%),
+        linear-gradient(180deg, #171717 0%, #101010 100%);
+    border: 1px solid #2a2a2a;
+    border-radius: 14px;
+    padding: 1.3rem;
+}
+.live-kicker {
+    font-size: 0.76rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: #60a5fa;
+    margin-bottom: 0.85rem;
+}
+.live-fight-title {
+    font-size: clamp(1.7rem, 4vw, 3.2rem);
+    line-height: 1.05;
+    font-weight: 800;
+    margin-bottom: 0.8rem;
+}
+.live-fight-subtitle { color: #9ca3af; margin-bottom: 1rem; }
+.live-robots {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    gap: 1rem;
+    align-items: center;
+}
+.live-robot {
+    border: 1px solid #2d2d2d;
+    border-radius: 12px;
+    padding: 1rem;
+    min-height: 150px;
+    background: rgba(255, 255, 255, 0.02);
+}
+.live-robot-name { font-size: clamp(1.35rem, 3vw, 2.4rem); font-weight: 800; }
+.live-robot-meta { color: #8d8d8d; margin-top: 0.45rem; }
+.live-vs {
+    font-size: clamp(1.2rem, 2vw, 1.8rem);
+    font-weight: 800;
+    color: #60a5fa;
+    letter-spacing: 0.08em;
+}
+.queue-list { display: flex; flex-direction: column; gap: 0.75rem; }
+.queue-item {
+    border: 1px solid #252525;
+    border-radius: 10px;
+    padding: 0.85rem 0.95rem;
+    background: #161616;
+}
+.queue-item.current {
+    border-color: #60a5fa;
+    box-shadow: 0 0 0 1px rgba(96, 165, 250, 0.18) inset;
+}
+.queue-slot {
+    color: #60a5fa;
+    font-weight: 700;
+    font-size: 0.76rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin-bottom: 0.25rem;
+}
+.queue-title { font-weight: 700; margin-bottom: 0.2rem; }
+.queue-meta { color: #7b7b7b; font-size: 0.82rem; }
+.live-sidebar { display: flex; flex-direction: column; gap: 1rem; }
+.live-sidebar .card { margin-bottom: 0; }
+.leaderboard-mini-row {
+    display: grid;
+    grid-template-columns: 40px 1fr 66px;
+    gap: 0.75rem;
+    padding: 0.55rem 0;
+    border-bottom: 1px solid #1f1f1f;
+    align-items: center;
+}
+.leaderboard-mini-row:last-child { border-bottom: none; }
+.leaderboard-mini-rank { color: #777; font-weight: 700; }
+.leaderboard-mini-name { font-weight: 600; }
+.leaderboard-mini-points { text-align: right; color: #60a5fa; font-weight: 700; }
+.board-header {
+    display: flex;
+    justify-content: space-between;
+    gap: 1rem;
+    align-items: end;
+    margin-bottom: 1.1rem;
+    flex-wrap: wrap;
+}
+@media (max-width: 820px) {
+    .live-grid { grid-template-columns: 1fr; }
+    .live-robots { grid-template-columns: 1fr; }
+    .live-vs { text-align: center; }
+    .board-header { align-items: start; }
+}
 """
 
 
@@ -216,6 +365,7 @@ def _page(title: str, *body_content) -> HTMLResponse:
         Meta(name="viewport", content="width=device-width, initial-scale=1"),
         Title(f"{title} — BitBT"),
         Style(_CSS),
+        Script(src="https://unpkg.com/htmx.org@1.9.12"),
     )
     return HTMLResponse(to_xml(Html(head, Body(Div(*body_content, cls="content")))))
 
@@ -226,6 +376,8 @@ def _event_topbar(ev: Event, active: str = "", db: Optional[Session] = None) -> 
         ("Overview", f"/events/{ev.id}", "overview"),
         ("Leaderboard", f"/events/{ev.id}/leaderboard", "leaderboard"),
         ("Bracket", f"/events/{ev.id}/bracket", "bracket"),
+        ("Live", f"/events/{ev.id}/live", "live"),
+        ("Next Up", f"/events/{ev.id}/next-up", "next_up"),
         ("My Robot", f"/events/{ev.id}/lookup", "lookup"),
         ("QR Code", f"/events/{ev.id}/qr", "qr"),
     ]
@@ -293,41 +445,344 @@ def _robot_points_in_event(robot_id: int, event_id: int, db: Session) -> int:
     return total or 0
 
 
-# ---------------------------------------------------------------------------
-# 13. Public event overview
-# ---------------------------------------------------------------------------
+def _event_is_live(ev: Event) -> bool:
+    return ev.status in {
+        EventStatus.qualifying,
+        EventStatus.bracket,
+        EventStatus.sub_events,
+    }
 
 
-@router.get("/{event_id}", response_class=HTMLResponse)
-def event_overview(event_id: int, db: Session = Depends(get_db)):
-    ev = _get_public_event(event_id, db)
-    if not ev:
-        return _not_found()
+def _auto_refresh_attrs(path: str, interval: str = "20s") -> dict[str, str]:
+    return {
+        "hx_get": path,
+        "hx_trigger": f"load, every {interval}",
+        "hx_swap": "outerHTML",
+        "cls": "auto-panel",
+    }
 
-    phases = db.query(Phase).filter(Phase.event_id == event_id).order_by(Phase.phase_number).all()
 
-    active_count = (
+def _phase_short_label(phase: Phase, matchup: Matchup) -> str:
+    if phase.phase_type == PhaseType.qualifying:
+        return f"Q{phase.phase_number}"
+    return _public_bracket_round_label(matchup.bracket_round or 1, 4)
+
+
+def _phase_long_label(phase: Phase, matchup: Matchup) -> str:
+    if phase.phase_type == PhaseType.qualifying:
+        return f"Qualifying Round {phase.phase_number}"
+    return _public_bracket_round_label(matchup.bracket_round or 1, 4)
+
+
+def _leaderboard_rows(event_id: int, db: Session) -> list[dict]:
+    """Aggregate the public leaderboard rows used by multiple Phase 6 views."""
+    active_ers = (
         db.query(EventRobot)
         .filter(EventRobot.event_id == event_id, EventRobot.is_reserve == False)
+        .all()
+    )
+
+    rows: list[dict] = []
+    for er in active_ers:
+        robot = er.robot
+        results = (
+            db.query(Result)
+            .join(Matchup, Matchup.id == Result.matchup_id)
+            .join(Phase, Phase.id == Matchup.phase_id)
+            .filter(
+                Phase.event_id == event_id,
+                Result.robot_id == robot.id,
+                Matchup.status == MatchupStatus.completed,
+            )
+            .all()
+        )
+
+        total_pts = sum(r.points_scored for r in results)
+        fights = len(results)
+        wins = 0
+        matchup_ids = sorted({r.matchup_id for r in results})
+
+        for matchup_id in matchup_ids:
+            all_results = db.query(Result).filter(Result.matchup_id == matchup_id).all()
+            if len(all_results) >= 2:
+                my_pts = next((r.points_scored for r in all_results if r.robot_id == robot.id), 0)
+                opp_pts = next((r.points_scored for r in all_results if r.robot_id != robot.id), 0)
+                if my_pts > opp_pts:
+                    wins += 1
+            elif len(all_results) == 1:
+                wins += 1
+
+        rows.append({
+            "robot": robot,
+            "roboteer": robot.roboteer,
+            "total_pts": total_pts,
+            "fights": fights,
+            "wins": wins,
+        })
+
+    rows.sort(key=lambda row: (-row["total_pts"], -row["wins"], row["robot"].robot_name.lower()))
+    return rows
+
+
+def _resolve_run_order_item(event_id: int, ro: RunOrder, db: Session) -> Optional[dict]:
+    if ro.matchup_type == RunOrderMatchupType.main:
+        matchup = db.query(Matchup).filter(Matchup.id == ro.matchup_id).first()
+        if not matchup:
+            return None
+
+        phase = matchup.phase
+        phase_label = _phase_long_label(phase, matchup)
+        r1_name = matchup.robot1.robot_name if matchup.robot1 else "TBD"
+        r2_name = matchup.robot2.robot_name if matchup.robot2 else "BYE"
+        return {
+            "run_order_id": ro.id,
+            "slot_index": ro.slot_index,
+            "status": matchup.status,
+            "title": f"{r1_name} vs {r2_name}" if matchup.robot2_id else f"{r1_name} receives a bye",
+            "meta": phase_label,
+            "href": f"/events/{event_id}/bracket" if phase.phase_type == PhaseType.bracket else f"/events/{event_id}/robot/{matchup.robot1_id}",
+            "type_label": "Main Event",
+        }
+
+    matchup = db.query(SubEventMatchup).filter(SubEventMatchup.id == ro.matchup_id).first()
+    if not matchup:
+        return None
+
+    team1 = matchup.team1.team_name if matchup.team1 else "TBD"
+    team2 = matchup.team2.team_name if matchup.team2 else "BYE"
+    sub_event_name = matchup.sub_event.name if matchup.sub_event else "Sub-event"
+    return {
+        "run_order_id": ro.id,
+        "slot_index": ro.slot_index,
+        "status": matchup.status,
+        "title": f"{team1} vs {team2}" if matchup.team2_id else f"{team1} advances by bye",
+        "meta": f"{sub_event_name} · Round {matchup.round_number}",
+        "href": f"/events/{event_id}/sub-events/{matchup.sub_event_id}",
+        "type_label": "Sub-event",
+    }
+
+
+def _pending_run_order_items(event_id: int, db: Session) -> list[dict]:
+    rows = (
+        db.query(RunOrder)
+        .filter(RunOrder.event_id == event_id)
+        .order_by(RunOrder.slot_index)
+        .all()
+    )
+
+    items: list[dict] = []
+    for ro in rows:
+        item = _resolve_run_order_item(event_id, ro, db)
+        if item and item["status"] == MatchupStatus.pending:
+            items.append(item)
+    return items
+
+
+def _robot_main_history(robot_id: int, event_id: int, db: Session) -> list[dict]:
+    matchups = (
+        db.query(Matchup)
+        .join(Phase, Phase.id == Matchup.phase_id)
+        .filter(
+            Phase.event_id == event_id,
+            Matchup.status == MatchupStatus.completed,
+            or_(Matchup.robot1_id == robot_id, Matchup.robot2_id == robot_id),
+        )
+        .order_by(Phase.phase_type.desc(), Matchup.bracket_round.desc(), Phase.phase_number.desc(), Matchup.display_order.desc())
+        .all()
+    )
+
+    history: list[dict] = []
+    for matchup in matchups:
+        phase = matchup.phase
+        if matchup.robot2_id is None:
+            history.append({
+                "kind": "main",
+                "title": "Bye",
+                "meta": _phase_long_label(phase, matchup),
+                "detail": f"Automatic advance for {BYE_POINTS} points.",
+                "score": f"{BYE_POINTS}-0",
+                "outcome": "Win",
+            })
+            continue
+
+        opponent = matchup.robot2 if matchup.robot1_id == robot_id else matchup.robot1
+        my_result = next((result for result in matchup.results if result.robot_id == robot_id), None)
+        opp_result = next((result for result in matchup.results if opponent and result.robot_id == opponent.id), None)
+        my_pts = my_result.points_scored if my_result else 0
+        opp_pts = opp_result.points_scored if opp_result else 0
+        if my_pts > opp_pts:
+            outcome = "Win"
+        elif my_pts < opp_pts:
+            outcome = "Loss"
+        else:
+            outcome = "Draw"
+
+        history.append({
+            "kind": "main",
+            "title": opponent.robot_name if opponent else "Unknown opponent",
+            "href": f"/events/{event_id}/robot/{opponent.id}" if opponent else None,
+            "meta": _phase_long_label(phase, matchup),
+            "detail": points_to_outcome_label(my_pts, opp_pts),
+            "score": f"{my_pts}-{opp_pts}",
+            "outcome": outcome,
+        })
+
+    return history
+
+
+def _robot_sub_event_history(robot_id: int, event_id: int, db: Session) -> list[dict]:
+    sub_matchups = (
+        db.query(SubEventMatchup)
+        .join(SubEvent, SubEvent.id == SubEventMatchup.sub_event_id)
+        .filter(
+            SubEvent.event_id == event_id,
+            SubEventMatchup.status == MatchupStatus.completed,
+        )
+        .order_by(SubEventMatchup.round_number.desc(), SubEventMatchup.display_order.desc())
+        .all()
+    )
+
+    history: list[dict] = []
+    for matchup in sub_matchups:
+        teams = [matchup.team1, matchup.team2]
+        my_team = next(
+            (
+                team for team in teams
+                if team and robot_id in {team.robot1_id, team.robot2_id}
+            ),
+            None,
+        )
+        if not my_team:
+            continue
+
+        opponent = matchup.team2 if matchup.team1_id == my_team.id else matchup.team1
+        won = matchup.winner_team_id == my_team.id
+        history.append({
+            "kind": "sub_event",
+            "title": my_team.team_name,
+            "href": f"/events/{event_id}/sub-events/{matchup.sub_event_id}",
+            "meta": f"{matchup.sub_event.name} · Round {matchup.round_number}",
+            "detail": (
+                f"Defeated {opponent.team_name}" if won and opponent
+                else f"Lost to {opponent.team_name}" if opponent
+                else "Advance by bye"
+            ),
+            "score": "Team win" if won else "Team loss",
+            "outcome": "Win" if won else "Loss",
+        })
+
+    return history
+
+
+def _robot_stats(robot_id: int, event_id: int, db: Session) -> dict:
+    main_matchups = (
+        db.query(Matchup)
+        .join(Phase, Phase.id == Matchup.phase_id)
+        .filter(
+            Phase.event_id == event_id,
+            Matchup.status == MatchupStatus.completed,
+            or_(Matchup.robot1_id == robot_id, Matchup.robot2_id == robot_id),
+        )
+        .all()
+    )
+
+    stats = {
+        "fights": 0,
+        "wins": 0,
+        "losses": 0,
+        "draws": 0,
+        "points": 0,
+        "byes": 0,
+        "qualifying_points": 0,
+        "bracket_points": 0,
+        "head_to_head": {},
+        "sub_event_wins": 0,
+        "sub_event_losses": 0,
+    }
+
+    for matchup in main_matchups:
+        phase = matchup.phase
+        stats["fights"] += 1
+        if matchup.robot2_id is None:
+            stats["wins"] += 1
+            stats["byes"] += 1
+            stats["points"] += BYE_POINTS
+            if phase.phase_type == PhaseType.qualifying:
+                stats["qualifying_points"] += BYE_POINTS
+            else:
+                stats["bracket_points"] += BYE_POINTS
+            continue
+
+        opponent = matchup.robot2 if matchup.robot1_id == robot_id else matchup.robot1
+        my_result = next((result for result in matchup.results if result.robot_id == robot_id), None)
+        opp_result = next((result for result in matchup.results if opponent and result.robot_id == opponent.id), None)
+        my_pts = my_result.points_scored if my_result else 0
+        opp_pts = opp_result.points_scored if opp_result else 0
+
+        stats["points"] += my_pts
+        if phase.phase_type == PhaseType.qualifying:
+            stats["qualifying_points"] += my_pts
+        else:
+            stats["bracket_points"] += my_pts
+
+        h2h = stats["head_to_head"].setdefault(opponent.id, {
+            "opponent": opponent,
+            "fights": 0,
+            "wins": 0,
+            "losses": 0,
+            "draws": 0,
+            "points_for": 0,
+            "points_against": 0,
+        })
+        h2h["fights"] += 1
+        h2h["points_for"] += my_pts
+        h2h["points_against"] += opp_pts
+
+        if my_pts > opp_pts:
+            stats["wins"] += 1
+            h2h["wins"] += 1
+        elif my_pts < opp_pts:
+            stats["losses"] += 1
+            h2h["losses"] += 1
+        else:
+            stats["draws"] += 1
+            h2h["draws"] += 1
+
+    for item in _robot_sub_event_history(robot_id, event_id, db):
+        if item["outcome"] == "Win":
+            stats["sub_event_wins"] += 1
+        else:
+            stats["sub_event_losses"] += 1
+
+    stats["head_to_head_rows"] = sorted(
+        stats["head_to_head"].values(),
+        key=lambda row: (-row["wins"], row["losses"], row["opponent"].robot_name.lower()),
+    )
+    return stats
+
+
+def _render_overview_panel(ev: Event, db: Session) -> Div:
+    phases = db.query(Phase).filter(Phase.event_id == ev.id).order_by(Phase.phase_number).all()
+    active_count = (
+        db.query(EventRobot)
+        .filter(EventRobot.event_id == ev.id, EventRobot.is_reserve == False)
         .count()
     )
     reserve_count = (
         db.query(EventRobot)
-        .filter(EventRobot.event_id == event_id, EventRobot.is_reserve == True)
+        .filter(EventRobot.event_id == ev.id, EventRobot.is_reserve == True)
         .count()
     )
+    pending_items = _pending_run_order_items(ev.id, db)
 
-    # Phase cards
     phase_items = []
     for ph in phases:
-        completed = sum(
-            1 for m in ph.matchups if m.status == MatchupStatus.completed
-        )
+        completed = sum(1 for m in ph.matchups if m.status == MatchupStatus.completed)
         total = len(ph.matchups)
         label = f"Qualifying Round {ph.phase_number}" if ph.phase_type == PhaseType.qualifying else "Main Bracket"
         phase_items.append(Li(
             Span(label, style="color:#ccc;"),
-            Span(f" — {completed}/{total} fights complete", style="color:#555;font-size:0.85rem;"),
+            Span(f" - {completed}/{total} fights complete", style="color:#555;font-size:0.85rem;"),
             Span(ph.status.value, cls=f"badge badge-{ph.status.value}", style="margin-left:0.5rem;"),
             style="padding:0.35rem 0;",
         ))
@@ -347,6 +802,7 @@ def event_overview(event_id: int, db: Session = Depends(get_db)):
             Li(Span("Status: ", style="color:#888;"), _status_badge(ev.status)),
             Li(Span("Active robots: ", style="color:#888;"), str(active_count)),
             Li(Span("Reserves: ", style="color:#888;"), str(reserve_count)),
+            Li(Span("Pending fights: ", style="color:#888;"), str(len(pending_items))),
             style="list-style:none;",
         ),
         style="margin-bottom:1.2rem;",
@@ -354,25 +810,468 @@ def event_overview(event_id: int, db: Session = Depends(get_db)):
     )
 
     cta = Div(
-        A("🔍 Find my robot", href=f"/events/{event_id}/lookup", cls="btn btn-primary"),
+        A("Find my robot", href=f"/events/{ev.id}/lookup", cls="btn btn-primary"),
         " ",
-        A("🏆 Leaderboard", href=f"/events/{event_id}/leaderboard", cls="btn btn-secondary"),
+        A("Leaderboard", href=f"/events/{ev.id}/leaderboard", cls="btn btn-secondary"),
         " ",
-        A("🪜 Bracket", href=f"/events/{event_id}/bracket", cls="btn btn-secondary"),
+        A("Live display", href=f"/events/{ev.id}/live", cls="btn btn-secondary"),
+        " ",
+        A("Next up board", href=f"/events/{ev.id}/next-up", cls="btn btn-secondary"),
         style="margin-bottom:1.4rem;",
     )
 
+    next_up = Div(
+        H2("Next Up"),
+        Div(
+            *[
+                Div(
+                    Div(f"Slot {item['slot_index'] + 1}", cls="queue-slot"),
+                    Div(item["title"], cls="queue-title"),
+                    Div(f"{item['type_label']} · {item['meta']}", cls="queue-meta"),
+                    cls="queue-item" + (" current" if index == 0 else ""),
+                )
+                for index, item in enumerate(pending_items[:3])
+            ]
+            if pending_items else [P("No pending fights in the run order.", cls="empty")],
+            cls="queue-list",
+        ),
+        cls="card",
+    )
+
+    panel_attrs = {"id": "overview-panel", "cls": "auto-panel"}
+    if _event_is_live(ev):
+        panel_attrs.update(_auto_refresh_attrs(f"/events/{ev.id}/overview-panel"))
+        panel_attrs["id"] = "overview-panel"
+
+    return Div(
+        H1(ev.event_name),
+        P(ev.weight_class, cls="subtitle"),
+        cta,
+        stats_card,
+        next_up,
+        phases_section,
+        **panel_attrs,
+    )
+
+
+def _render_robot_fights_panel(ev: Event, robot: Robot, db: Session) -> Div:
+    matchups = (
+        db.query(Matchup)
+        .join(Phase, Phase.id == Matchup.phase_id)
+        .filter(
+            Phase.event_id == ev.id,
+            or_(Matchup.robot1_id == robot.id, Matchup.robot2_id == robot.id),
+        )
+        .order_by(Phase.phase_number, Matchup.bracket_round, Matchup.display_order)
+        .all()
+    )
+
+    total_points = _robot_points_in_event(robot.id, ev.id, db)
+    completed_fights = sum(1 for m in matchups if m.status == MatchupStatus.completed)
+
+    fight_rows = []
+    for m in matchups:
+        phase = m.phase
+        phase_label = f"Q{phase.phase_number}" if phase.phase_type == PhaseType.qualifying else "Bracket"
+        phase_full = _phase_long_label(phase, m)
+
+        if m.robot2_id is None:
+            opponent_cell = Span("BYE", style="color:#555;font-style:italic;")
+            result_label, result_pts, row_cls = f"BYE ({BYE_POINTS} pts)", str(BYE_POINTS), "fight-row-win"
+        else:
+            opponent = m.robot2 if m.robot1_id == robot.id else m.robot1
+            opponent_cell = A(opponent.robot_name, href=f"/events/{ev.id}/robot/{opponent.id}")
+            if m.status == MatchupStatus.completed:
+                my_result = next((r for r in m.results if r.robot_id == robot.id), None)
+                opp_result = next((r for r in m.results if r.robot_id != robot.id), None)
+                my_pts = my_result.points_scored if my_result else 0
+                opp_pts = opp_result.points_scored if opp_result else 0
+                result_pts = str(my_pts)
+                if my_pts > opp_pts:
+                    result_label, row_cls = "Win", "fight-row-win"
+                elif my_pts < opp_pts:
+                    result_label, row_cls = "Loss", "fight-row-loss"
+                else:
+                    result_label, row_cls = "Draw", "fight-row-draw"
+            else:
+                result_label, result_pts, row_cls = "Upcoming", "-", "fight-row-pending"
+
+        pts_display = (
+            Span(result_pts, style="color:#4ade80;font-weight:600;")
+            if result_label in ("Win", f"BYE ({BYE_POINTS} pts)")
+            else Span(result_pts, style="color:#f87171;" if result_label == "Loss" else "color:#888;")
+        )
+        fight_rows.append(Tr(
+            Td(Span(phase_label, cls=f"badge badge-{phase.status.value}"), title=phase_full),
+            Td(opponent_cell),
+            Td(pts_display),
+            Td(Span(result_label, style="color:#888;font-size:0.82rem;")),
+            cls=row_cls,
+        ))
+
+    thumb = ""
+    if robot.image_url:
+        thumb = Img(
+            src=robot.image_url,
+            style="width:80px;height:80px;object-fit:cover;border-radius:8px;margin-bottom:1rem;",
+            alt=robot.robot_name,
+        )
+
+    fights_section = Div(
+        Div(
+            Table(
+                Thead(Tr(Th("Phase"), Th("Opponent"), Th("Pts"), Th("Result"))),
+                Tbody(*fight_rows) if fight_rows else Tbody(Tr(Td("No fights scheduled yet.", colspan="4", cls="empty"))),
+            ),
+            cls="table-wrap",
+        ),
+        cls="card",
+    )
+
+    panel_attrs = {"id": f"robot-panel-{robot.id}", "cls": "auto-panel"}
+    if _event_is_live(ev):
+        panel_attrs.update(_auto_refresh_attrs(f"/events/{ev.id}/robot/{robot.id}/panel"))
+        panel_attrs["id"] = f"robot-panel-{robot.id}"
+
+    return Div(
+        A("<- Robot lookup", href=f"/events/{ev.id}/lookup", cls="btn btn-sm btn-secondary", style="margin-bottom:1.2rem;display:inline-block;"),
+        thumb,
+        H1(robot.robot_name),
+        P(
+            Span(robot.roboteer.roboteer_name, style="color:#888;"),
+            Span(f" · {robot.weapon_type}", style="color:#555;") if robot.weapon_type else "",
+            cls="subtitle",
+        ),
+        Div(
+            Span(f"{completed_fights} fight(s) played", style="color:#888;font-size:0.88rem;"),
+            " · ",
+            Span(f"{total_points} pts total", style="color:#60a5fa;font-size:0.88rem;font-weight:600;"),
+            style="margin-bottom:0.9rem;",
+        ),
+        Div(
+            A("Detailed history", href=f"/events/{ev.id}/robot/{robot.id}/history", cls="btn btn-sm btn-secondary"),
+            " ",
+            A("Robot stats", href=f"/events/{ev.id}/robot/{robot.id}/stats", cls="btn btn-sm btn-secondary"),
+            style="margin-bottom:1rem;",
+        ),
+        fights_section,
+        **panel_attrs,
+    )
+
+
+def _render_leaderboard_panel(ev: Event, db: Session) -> Div:
+    rows = _leaderboard_rows(ev.id, db)
+    if not rows or all(row["fights"] == 0 for row in rows):
+        body = P("No results yet - check back once fights begin.", cls="empty")
+    else:
+        table_rows = []
+        for i, row in enumerate(rows, start=1):
+            rank_cls = f"rank-{i}" if i <= 3 else ""
+            robot = row["robot"]
+            thumb = Img(src=robot.image_url, cls="robot-thumb", alt=robot.robot_name) if robot.image_url else ""
+            table_rows.append(Tr(
+                Td(Span(str(i), cls=rank_cls)),
+                Td(thumb),
+                Td(A(robot.robot_name, href=f"/events/{ev.id}/robot/{robot.id}")),
+                Td(row["roboteer"].roboteer_name, style="color:#888;"),
+                Td(Span(str(row["total_pts"]), style="font-weight:700;color:#60a5fa;")),
+                Td(str(row["wins"])),
+                Td(str(row["fights"])),
+            ))
+        body = Div(
+            Table(
+                Thead(Tr(Th("#"), Th(""), Th("Robot"), Th("Roboteer"), Th("Pts"), Th("Wins"), Th("Fights"))),
+                Tbody(*table_rows),
+            ),
+            cls="table-wrap",
+        )
+
+    panel_attrs = {"id": "leaderboard-panel", "cls": "auto-panel"}
+    if _event_is_live(ev):
+        panel_attrs.update(_auto_refresh_attrs(f"/events/{ev.id}/leaderboard/panel"))
+        panel_attrs["id"] = "leaderboard-panel"
+
+    return Div(
+        H1("Leaderboard"),
+        P(f"{ev.event_name} · {ev.weight_class}", cls="subtitle"),
+        Div(body, cls="card"),
+        **panel_attrs,
+    )
+
+
+def _render_bracket_panel(ev: Event, db: Session) -> Div:
+    bracket_phase = (
+        db.query(Phase)
+        .filter(Phase.event_id == ev.id, Phase.phase_type == PhaseType.bracket)
+        .first()
+    )
+
+    if not bracket_phase:
+        content = Div(
+            P(
+                "The bracket hasn't been drawn yet. It will appear here once qualifying rounds are complete.",
+                cls="empty",
+            ),
+            cls="card",
+        )
+    else:
+        matchups = (
+            db.query(Matchup)
+            .filter(Matchup.phase_id == bracket_phase.id)
+            .order_by(Matchup.bracket_round, Matchup.display_order)
+            .all()
+        )
+        if not matchups:
+            content = Div(P("No bracket matchups yet.", cls="empty"), cls="card")
+        else:
+            rounds: dict[int, list[Matchup]] = {}
+            for matchup in matchups:
+                rounds.setdefault(matchup.bracket_round or 1, []).append(matchup)
+            total_rounds = _total_bracket_rounds(rounds)
+            sections = []
+            for round_number in sorted(rounds.keys()):
+                sections.append(P(_public_bracket_round_label(round_number, total_rounds), cls="round-header"))
+                for matchup in rounds[round_number]:
+                    sections.append(_bracket_matchup_card(matchup, ev.id))
+            content = Div(*sections, cls="card")
+
+    panel_attrs = {"id": "bracket-panel", "cls": "auto-panel"}
+    if _event_is_live(ev):
+        panel_attrs.update(_auto_refresh_attrs(f"/events/{ev.id}/bracket/panel"))
+        panel_attrs["id"] = "bracket-panel"
+
+    return Div(
+        H1("Bracket"),
+        P(f"{ev.event_name} · {ev.weight_class}", cls="subtitle"),
+        content,
+        **panel_attrs,
+    )
+
+
+def _render_live_panel(ev: Event, db: Session) -> Div:
+    pending_items = _pending_run_order_items(ev.id, db)
+    current_item = pending_items[0] if pending_items else None
+    leaderboard_rows = _leaderboard_rows(ev.id, db)[:8]
+
+    current_stage = Div(
+        Div("Now Fighting", cls="live-kicker"),
+        H2(current_item["title"], cls="live-fight-title") if current_item else H2("Awaiting next fight", cls="live-fight-title"),
+        P(
+            f"{current_item['type_label']} · {current_item['meta']}" if current_item else "No pending fights are currently scheduled.",
+            cls="live-fight-subtitle",
+        ),
+        Div(
+            *(
+                [
+                    Div(
+                        Div(current_item["title"].split(" vs ")[0], cls="live-robot-name"),
+                        Div(current_item["meta"], cls="live-robot-meta"),
+                        cls="live-robot",
+                    ),
+                    Div("VS", cls="live-vs"),
+                    Div(
+                        Div(current_item["title"].split(" vs ")[1] if " vs " in current_item["title"] else "BYE", cls="live-robot-name"),
+                        Div(current_item["type_label"], cls="live-robot-meta"),
+                        cls="live-robot",
+                    ),
+                ]
+                if current_item and " vs " in current_item["title"]
+                else [Div(P("The run order is empty right now.", cls="empty"), cls="card")]
+            ),
+            cls="live-robots",
+        ),
+        A("Open next-up board", href=f"/events/{ev.id}/next-up", cls="btn btn-secondary", style="margin-top:1rem;display:inline-block;"),
+        cls="live-stage",
+    )
+
+    queue_items = []
+    for index, item in enumerate(pending_items[:5]):
+        queue_items.append(Div(
+            Div(f"Slot {item['slot_index'] + 1}", cls="queue-slot"),
+            Div(item["title"], cls="queue-title"),
+            Div(f"{item['type_label']} · {item['meta']}", cls="queue-meta"),
+            cls="queue-item" + (" current" if index == 0 else ""),
+        ))
+
+    if not queue_items:
+        queue_items.append(P("No fights are currently queued.", cls="empty"))
+
+    leaderboard_items = []
+    if leaderboard_rows and any(row["fights"] > 0 for row in leaderboard_rows):
+        for index, row in enumerate(leaderboard_rows, start=1):
+            leaderboard_items.append(Div(
+                Div(str(index), cls="leaderboard-mini-rank"),
+                Div(
+                    Div(row["robot"].robot_name, cls="leaderboard-mini-name"),
+                    Div(row["roboteer"].roboteer_name, cls="queue-meta"),
+                ),
+                Div(str(row["total_pts"]), cls="leaderboard-mini-points"),
+                cls="leaderboard-mini-row",
+            ))
+    else:
+        leaderboard_items.append(P("Leaderboard will populate once results are entered.", cls="empty"))
+
+    return Div(
+        Div(
+            Div(
+                H1("Live Display"),
+                P(f"{ev.event_name} · auto-refreshing venue screen", cls="subtitle"),
+            ),
+            A("Public overview", href=f"/events/{ev.id}", cls="btn btn-secondary"),
+            cls="board-header",
+        ),
+        Div(
+            current_stage,
+            Div(
+                Div(H2("Up Next"), Div(*queue_items, cls="queue-list"), cls="card"),
+                Div(H2("Leaderboard"), Div(*leaderboard_items), cls="card"),
+                cls="live-sidebar",
+            ),
+            cls="live-grid",
+        ),
+        id="live-panel",
+        **_auto_refresh_attrs(f"/events/{ev.id}/live/panel", interval="15s"),
+    )
+
+
+def _render_next_up_panel(ev: Event, db: Session) -> Div:
+    pending_items = _pending_run_order_items(ev.id, db)
+    queue = []
+    for index, item in enumerate(pending_items[:10]):
+        queue.append(Div(
+            Div(f"Slot {item['slot_index'] + 1}", cls="queue-slot"),
+            Div(item["title"], cls="queue-title"),
+            Div(f"{item['type_label']} · {item['meta']}", cls="queue-meta"),
+            A("View", href=item["href"], cls="btn btn-sm btn-secondary", style="margin-top:0.6rem;display:inline-block;"),
+            cls="queue-item" + (" current" if index == 0 else ""),
+        ))
+
+    if not queue:
+        queue.append(P("No pending fights in the run order.", cls="empty"))
+
+    return Div(
+        H1("Next Up Board"),
+        P(f"{ev.event_name} · unified fight order", cls="subtitle"),
+        Div(*queue, cls="queue-list"),
+        id="next-up-panel",
+        **_auto_refresh_attrs(f"/events/{ev.id}/next-up/panel"),
+    )
+
+
+def _render_robot_history_panel(ev: Event, robot: Robot, db: Session) -> Div:
+    main_history = _robot_main_history(robot.id, ev.id, db)
+    sub_history = _robot_sub_event_history(robot.id, ev.id, db)
+    items = main_history + sub_history
+
+    panels = []
+    for item in items:
+        title = A(item["title"], href=item["href"]) if item.get("href") else Span(item["title"], style="font-weight:700;")
+        outcome_color = "#4ade80" if item["outcome"] == "Win" else "#f87171" if item["outcome"] == "Loss" else "#fbbf24"
+        panels.append(Div(
+            Div(
+                Span(item["meta"], cls="badge badge-pending"),
+                Span(item["kind"].replace("_", " "), style="color:#666;font-size:0.78rem;text-transform:uppercase;letter-spacing:0.06em;"),
+                cls="history-meta",
+            ),
+            Div(title, Span(item["score"], cls="history-score"), cls="history-title"),
+            P(item["detail"], style="color:#8d8d8d;margin-top:0.45rem;"),
+            P(item["outcome"], style=f"color:{outcome_color};font-weight:700;margin-top:0.55rem;"),
+            cls="history-item",
+        ))
+
+    if not panels:
+        panels.append(P("No completed fight history yet.", cls="empty"))
+
+    panel_attrs = {"id": f"robot-history-panel-{robot.id}", "cls": "auto-panel"}
+    if _event_is_live(ev):
+        panel_attrs.update(_auto_refresh_attrs(f"/events/{ev.id}/robot/{robot.id}/history/panel"))
+        panel_attrs["id"] = f"robot-history-panel-{robot.id}"
+
+    return Div(
+        A("<- Back to robot", href=f"/events/{ev.id}/robot/{robot.id}", cls="btn btn-sm btn-secondary", style="margin-bottom:1.2rem;display:inline-block;"),
+        H1(f"{robot.robot_name} history"),
+        P(f"{robot.roboteer.roboteer_name} · completed results only", cls="subtitle"),
+        Div(*panels, cls="stack"),
+        **panel_attrs,
+    )
+
+
+def _render_robot_stats_panel(ev: Event, robot: Robot, db: Session) -> Div:
+    stats = _robot_stats(robot.id, ev.id, db)
+    tiles = [
+        ("Main fights", stats["fights"], f"{stats['wins']}W {stats['losses']}L {stats['draws']}D"),
+        ("Total points", stats["points"], f"{stats['qualifying_points']} qualifying"),
+        ("Bracket points", stats["bracket_points"], f"{stats['byes']} byes"),
+        ("Sub-event record", f"{stats['sub_event_wins']}-{stats['sub_event_losses']}", "team results"),
+    ]
+
+    h2h_rows = []
+    for row in stats["head_to_head_rows"]:
+        h2h_rows.append(Tr(
+            Td(A(row["opponent"].robot_name, href=f"/events/{ev.id}/robot/{row['opponent'].id}")),
+            Td(f"{row['wins']}-{row['losses']}-{row['draws']}"),
+            Td(f"{row['points_for']}-{row['points_against']}"),
+            Td(str(row["fights"])),
+        ))
+
+    h2h_section = Div(
+        H2("Performance vs other robots"),
+        Div(
+            Table(
+                Thead(Tr(Th("Opponent"), Th("Record"), Th("Points"), Th("Fights"))),
+                Tbody(*h2h_rows) if h2h_rows else Tbody(Tr(Td("No completed 1v1 opponents yet.", colspan="4", cls="empty"))),
+            ),
+            cls="table-wrap",
+        ),
+        cls="card",
+    )
+
+    panel_attrs = {"id": f"robot-stats-panel-{robot.id}", "cls": "auto-panel"}
+    if _event_is_live(ev):
+        panel_attrs.update(_auto_refresh_attrs(f"/events/{ev.id}/robot/{robot.id}/stats/panel"))
+        panel_attrs["id"] = f"robot-stats-panel-{robot.id}"
+
+    return Div(
+        A("<- Back to robot", href=f"/events/{ev.id}/robot/{robot.id}", cls="btn btn-sm btn-secondary", style="margin-bottom:1.2rem;display:inline-block;"),
+        H1(f"{robot.robot_name} stats"),
+        P(f"{robot.roboteer.roboteer_name} · {ev.event_name}", cls="subtitle"),
+        Div(*[
+            Div(
+                Div(label, cls="stat-label"),
+                Div(str(value), cls="stat-value"),
+                Div(meta, cls="stat-meta"),
+                cls="stat-tile",
+            )
+            for label, value, meta in tiles
+        ], cls="stat-grid card"),
+        h2h_section,
+        **panel_attrs,
+    )
+
+
+# ---------------------------------------------------------------------------
+# 13. Public event overview
+# ---------------------------------------------------------------------------
+
+
+@router.get("/{event_id}", response_class=HTMLResponse)
+def event_overview(event_id: int, db: Session = Depends(get_db)):
+    ev = _get_public_event(event_id, db)
+    if not ev:
+        return _not_found()
     return _page(
         ev.event_name,
         _event_topbar(ev, "overview", db=db),
-        Div(
-            H1(ev.event_name),
-            P(ev.weight_class, cls="subtitle"),
-            cta,
-            stats_card,
-            phases_section,
-        ),
+        _render_overview_panel(ev, db),
     )
+
+
+@router.get("/{event_id}/overview-panel", response_class=HTMLResponse)
+def event_overview_panel(event_id: int, db: Session = Depends(get_db)):
+    ev = _get_public_event(event_id, db)
+    if not ev:
+        return _not_found()
+    return HTMLResponse(to_xml(_render_overview_panel(ev, db)))
 
 
 # ---------------------------------------------------------------------------
@@ -496,124 +1395,20 @@ def robot_fights(
 
     if not _robot_has_event_history(robot_id, event_id, db):
         return _not_found()
-
-    # All matchups for this robot in this event, ordered by phase/display_order
-    matchups = (
-        db.query(Matchup)
-        .join(Phase, Phase.id == Matchup.phase_id)
-        .filter(
-            Phase.event_id == event_id,
-            or_(Matchup.robot1_id == robot_id, Matchup.robot2_id == robot_id),
-        )
-        .order_by(Phase.phase_number, Matchup.bracket_round, Matchup.display_order)
-        .all()
-    )
-
-    total_points = _robot_points_in_event(robot_id, event_id, db)
-    completed_fights = sum(1 for m in matchups if m.status == MatchupStatus.completed)
-
-    # --- Build fight rows ---
-    fight_rows = []
-    for m in matchups:
-        phase: Phase = m.phase
-        if phase.phase_type == PhaseType.qualifying:
-            phase_label = f"Q{phase.phase_number}"
-            phase_full = f"Qualifying Round {phase.phase_number}"
-        else:
-            phase_full = phase_label = "Bracket"
-
-        is_bye = m.robot2_id is None
-        if is_bye:
-            opponent_cell = Span("BYE", style="color:#555;font-style:italic;")
-            result_label, result_pts, opp_pts = f"BYE ({BYE_POINTS} pts)", str(BYE_POINTS), "—"
-            row_cls = "fight-row-win"
-        else:
-            opponent = m.robot2 if m.robot1_id == robot_id else m.robot1
-            opponent_cell = A(opponent.robot_name, href=f"/events/{event_id}/robot/{opponent.id}")
-
-            if m.status == MatchupStatus.completed:
-                my_result = next((r for r in m.results if r.robot_id == robot_id), None)
-                opp_result = next((r for r in m.results if r.robot_id != robot_id), None)
-                my_pts = my_result.points_scored if my_result else 0
-                opp_pts = opp_result.points_scored if opp_result else 0
-
-                result_pts = str(my_pts)
-                opp_pts_str = str(opp_pts)
-
-                if my_pts > opp_pts:
-                    result_label = "Win"
-                    row_cls = "fight-row-win"
-                elif my_pts < opp_pts:
-                    result_label = "Loss"
-                    row_cls = "fight-row-loss"
-                else:
-                    result_label = "Draw"
-                    row_cls = "fight-row-draw"
-            else:
-                result_label = "Upcoming"
-                result_pts = "—"
-                opp_pts_str = "—"
-                row_cls = "fight-row-pending"
-
-        pts_display = (
-            Span(result_pts, style="color:#4ade80;font-weight:600;")
-            if result_label in ("Win", f"BYE ({BYE_POINTS} pts)")
-            else Span(result_pts, style="color:#f87171;" if result_label == "Loss" else "color:#888;")
-        )
-
-        fight_rows.append(Tr(
-            Td(Span(phase_label, cls=f"badge badge-{phase.status.value}"), title=phase_full),
-            Td(opponent_cell),
-            Td(pts_display),
-            Td(Span(result_label, style="color:#888;font-size:0.82rem;")),
-            cls=row_cls,
-        ))
-
-    thumb = ""
-    if robot.image_url:
-        thumb = Img(
-            src=robot.image_url,
-            style="width:80px;height:80px;object-fit:cover;border-radius:8px;margin-bottom:1rem;",
-            alt=robot.robot_name,
-        )
-
-    summary_parts = [
-        Span(f"{completed_fights} fight(s) played", style="color:#888;font-size:0.88rem;"),
-        " · ",
-        Span(f"{total_points} pts total", style="color:#60a5fa;font-size:0.88rem;font-weight:600;"),
-    ]
-
-    fights_section = ""
-    if fight_rows:
-        fights_section = Div(
-            Div(
-                Table(
-                    Thead(Tr(Th("Phase"), Th("Opponent"), Th("Pts"), Th("Result"))),
-                    Tbody(*fight_rows),
-                ),
-                cls="table-wrap",
-            ),
-            cls="card",
-        )
-    else:
-        fights_section = Div(P("No fights scheduled yet.", cls="empty"), cls="card")
-
     return _page(
         f"{robot.robot_name} — {ev.event_name}",
         _event_topbar(ev, "lookup", db=db),
-        Div(
-            A("← Robot lookup", href=f"/events/{event_id}/lookup", cls="btn btn-sm btn-secondary", style="margin-bottom:1.2rem;display:inline-block;"),
-            thumb,
-            H1(robot.robot_name),
-            P(
-                Span(robot.roboteer.roboteer_name, style="color:#888;"),
-                Span(f" · {robot.weapon_type}", style="color:#555;") if robot.weapon_type else "",
-                cls="subtitle",
-            ),
-            Div(*summary_parts, style="margin-bottom:1.4rem;"),
-            fights_section,
-        ),
+        _render_robot_fights_panel(ev, robot, db),
     )
+
+
+@router.get("/{event_id}/robot/{robot_id}/panel", response_class=HTMLResponse)
+def robot_fights_panel(event_id: int, robot_id: int, db: Session = Depends(get_db)):
+    ev = _get_public_event(event_id, db)
+    robot = db.query(Robot).filter(Robot.id == robot_id).first()
+    if not ev or not robot or not _robot_has_event_history(robot_id, event_id, db):
+        return _not_found()
+    return HTMLResponse(to_xml(_render_robot_fights_panel(ev, robot, db)))
 
 
 # ---------------------------------------------------------------------------
@@ -626,103 +1421,19 @@ def leaderboard(event_id: int, db: Session = Depends(get_db)):
     ev = _get_public_event(event_id, db)
     if not ev:
         return _not_found()
-
-    # All active robots in this event
-    active_ers = (
-        db.query(EventRobot)
-        .filter(EventRobot.event_id == event_id, EventRobot.is_reserve == False)
-        .all()
-    )
-
-    # Aggregate points and fight stats per robot
-    rows = []
-    for er in active_ers:
-        robot: Robot = er.robot
-        results = (
-            db.query(Result)
-            .join(Matchup, Matchup.id == Result.matchup_id)
-            .join(Phase, Phase.id == Matchup.phase_id)
-            .filter(
-                Phase.event_id == event_id,
-                Result.robot_id == robot.id,
-                Matchup.status == MatchupStatus.completed,
-            )
-            .all()
-        )
-
-        total_pts = sum(r.points_scored for r in results)
-        fights = len(results)
-
-        # Wins: robot scored more points than opponent in same matchup
-        wins = 0
-        matchup_ids = list({r.matchup_id for r in results})
-        for mid in matchup_ids:
-            matchup_results = [r for r in results if r.matchup_id == mid]
-            all_results = db.query(Result).filter(Result.matchup_id == mid).all()
-            if len(all_results) >= 2:
-                my_pts = next((r.points_scored for r in all_results if r.robot_id == robot.id), 0)
-                opp_pts = next((r.points_scored for r in all_results if r.robot_id != robot.id), 0)
-                if my_pts > opp_pts:
-                    wins += 1
-            elif len(all_results) == 1 and matchup_results:
-                # Bye — always counts as a win
-                wins += 1
-
-        rows.append({
-            "robot": robot,
-            "roboteer": robot.roboteer,
-            "total_pts": total_pts,
-            "fights": fights,
-            "wins": wins,
-        })
-
-    # Sort: total points desc, then wins desc
-    rows.sort(key=lambda r: (-r["total_pts"], -r["wins"]))
-
-    if not rows or all(r["fights"] == 0 for r in rows):
-        body = P("No results yet — check back once fights begin.", cls="empty")
-    else:
-        table_rows = []
-        for i, row in enumerate(rows, start=1):
-            rank_cls = f"rank-{i}" if i <= 3 else ""
-            robot: Robot = row["robot"]
-            thumb = (
-                Img(src=robot.image_url, cls="robot-thumb", alt=robot.robot_name)
-                if robot.image_url
-                else ""
-            )
-            table_rows.append(Tr(
-                Td(Span(str(i), cls=rank_cls)),
-                Td(thumb),
-                Td(A(robot.robot_name, href=f"/events/{event_id}/robot/{robot.id}")),
-                Td(row["roboteer"].roboteer_name, style="color:#888;"),
-                Td(
-                    Span(str(row["total_pts"]), style="font-weight:700;color:#60a5fa;"),
-                ),
-                Td(str(row["wins"])),
-                Td(str(row["fights"])),
-            ))
-
-        body = Div(
-            Table(
-                Thead(Tr(
-                    Th("#"), Th(""), Th("Robot"), Th("Roboteer"),
-                    Th("Pts"), Th("Wins"), Th("Fights"),
-                )),
-                Tbody(*table_rows),
-            ),
-            cls="table-wrap",
-        )
-
     return _page(
         f"Leaderboard — {ev.event_name}",
         _event_topbar(ev, "leaderboard", db=db),
-        Div(
-            H1("🏆 Leaderboard"),
-            P(f"{ev.event_name} · {ev.weight_class}", cls="subtitle"),
-            Div(body, cls="card"),
-        ),
+        _render_leaderboard_panel(ev, db),
     )
+
+
+@router.get("/{event_id}/leaderboard/panel", response_class=HTMLResponse)
+def leaderboard_panel(event_id: int, db: Session = Depends(get_db)):
+    ev = _get_public_event(event_id, db)
+    if not ev:
+        return _not_found()
+    return HTMLResponse(to_xml(_render_leaderboard_panel(ev, db)))
 
 
 # ---------------------------------------------------------------------------
@@ -735,71 +1446,19 @@ def bracket_view(event_id: int, db: Session = Depends(get_db)):
     ev = _get_public_event(event_id, db)
     if not ev:
         return _not_found()
-
-    bracket_phase = (
-        db.query(Phase)
-        .filter(Phase.event_id == event_id, Phase.phase_type == PhaseType.bracket)
-        .first()
-    )
-
-    if not bracket_phase:
-        return _page(
-            f"Bracket — {ev.event_name}",
-            _event_topbar(ev, "bracket", db=db),
-            Div(
-                H1("🪜 Bracket"),
-                P(f"{ev.event_name} · {ev.weight_class}", cls="subtitle"),
-                Div(
-                    P(
-                        "The bracket hasn't been drawn yet. "
-                        "It will appear here once qualifying rounds are complete.",
-                        cls="empty",
-                    ),
-                    cls="card",
-                ),
-            ),
-        )
-
-    matchups = (
-        db.query(Matchup)
-        .filter(Matchup.phase_id == bracket_phase.id)
-        .order_by(Matchup.bracket_round, Matchup.display_order)
-        .all()
-    )
-
-    if not matchups:
-        return _page(
-            f"Bracket — {ev.event_name}",
-            _event_topbar(ev, "bracket", db=db),
-            Div(
-                H1("🪜 Bracket"),
-                P(f"{ev.event_name} · {ev.weight_class}", cls="subtitle"),
-                Div(P("No bracket matchups yet.", cls="empty"), cls="card"),
-            ),
-        )
-
-    rounds: dict[int, list[Matchup]] = {}
-    for matchup in matchups:
-        round_number = matchup.bracket_round or 1
-        rounds.setdefault(round_number, []).append(matchup)
-
-    total_rounds = _total_bracket_rounds(rounds)
-
-    sections = []
-    for round_number in sorted(rounds.keys()):
-        sections.append(P(_public_bracket_round_label(round_number, total_rounds), cls="round-header"))
-        for m in rounds[round_number]:
-            sections.append(_bracket_matchup_card(m, event_id))
-
     return _page(
         f"Bracket — {ev.event_name}",
         _event_topbar(ev, "bracket", db=db),
-        Div(
-            H1("🪜 Bracket"),
-            P(f"{ev.event_name} · {ev.weight_class}", cls="subtitle"),
-            Div(*sections, cls="card"),
-        ),
+        _render_bracket_panel(ev, db),
     )
+
+
+@router.get("/{event_id}/bracket/panel", response_class=HTMLResponse)
+def bracket_panel(event_id: int, db: Session = Depends(get_db)):
+    ev = _get_public_event(event_id, db)
+    if not ev:
+        return _not_found()
+    return HTMLResponse(to_xml(_render_bracket_panel(ev, db)))
 
 
 def _total_bracket_rounds(rounds: dict[int, list[Matchup]]) -> int:
@@ -936,6 +1595,95 @@ def _make_qr_svg(url: str) -> str:
     buf = io.BytesIO()
     img.save(buf)
     return buf.getvalue().decode("utf-8")
+
+
+# ---------------------------------------------------------------------------
+# Phase 6 — Enhanced public views
+# ---------------------------------------------------------------------------
+
+
+@router.get("/{event_id}/live", response_class=HTMLResponse)
+def live_display(event_id: int, db: Session = Depends(get_db)):
+    ev = _get_public_event(event_id, db)
+    if not ev:
+        return _not_found()
+    return _page(
+        f"Live Display — {ev.event_name}",
+        _event_topbar(ev, "live", db=db),
+        _render_live_panel(ev, db),
+    )
+
+
+@router.get("/{event_id}/live/panel", response_class=HTMLResponse)
+def live_display_panel(event_id: int, db: Session = Depends(get_db)):
+    ev = _get_public_event(event_id, db)
+    if not ev:
+        return _not_found()
+    return HTMLResponse(to_xml(_render_live_panel(ev, db)))
+
+
+@router.get("/{event_id}/next-up", response_class=HTMLResponse)
+def next_up_board(event_id: int, db: Session = Depends(get_db)):
+    ev = _get_public_event(event_id, db)
+    if not ev:
+        return _not_found()
+    return _page(
+        f"Next Up — {ev.event_name}",
+        _event_topbar(ev, "next_up", db=db),
+        _render_next_up_panel(ev, db),
+    )
+
+
+@router.get("/{event_id}/next-up/panel", response_class=HTMLResponse)
+def next_up_board_panel(event_id: int, db: Session = Depends(get_db)):
+    ev = _get_public_event(event_id, db)
+    if not ev:
+        return _not_found()
+    return HTMLResponse(to_xml(_render_next_up_panel(ev, db)))
+
+
+@router.get("/{event_id}/robot/{robot_id}/history", response_class=HTMLResponse)
+def robot_history(event_id: int, robot_id: int, db: Session = Depends(get_db)):
+    ev = _get_public_event(event_id, db)
+    robot = db.query(Robot).filter(Robot.id == robot_id).first()
+    if not ev or not robot or not _robot_has_event_history(robot_id, event_id, db):
+        return _not_found()
+    return _page(
+        f"{robot.robot_name} History — {ev.event_name}",
+        _event_topbar(ev, "lookup", db=db),
+        _render_robot_history_panel(ev, robot, db),
+    )
+
+
+@router.get("/{event_id}/robot/{robot_id}/history/panel", response_class=HTMLResponse)
+def robot_history_panel(event_id: int, robot_id: int, db: Session = Depends(get_db)):
+    ev = _get_public_event(event_id, db)
+    robot = db.query(Robot).filter(Robot.id == robot_id).first()
+    if not ev or not robot or not _robot_has_event_history(robot_id, event_id, db):
+        return _not_found()
+    return HTMLResponse(to_xml(_render_robot_history_panel(ev, robot, db)))
+
+
+@router.get("/{event_id}/robot/{robot_id}/stats", response_class=HTMLResponse)
+def robot_stats(event_id: int, robot_id: int, db: Session = Depends(get_db)):
+    ev = _get_public_event(event_id, db)
+    robot = db.query(Robot).filter(Robot.id == robot_id).first()
+    if not ev or not robot or not _robot_has_event_history(robot_id, event_id, db):
+        return _not_found()
+    return _page(
+        f"{robot.robot_name} Stats — {ev.event_name}",
+        _event_topbar(ev, "lookup", db=db),
+        _render_robot_stats_panel(ev, robot, db),
+    )
+
+
+@router.get("/{event_id}/robot/{robot_id}/stats/panel", response_class=HTMLResponse)
+def robot_stats_panel(event_id: int, robot_id: int, db: Session = Depends(get_db)):
+    ev = _get_public_event(event_id, db)
+    robot = db.query(Robot).filter(Robot.id == robot_id).first()
+    if not ev or not robot or not _robot_has_event_history(robot_id, event_id, db):
+        return _not_found()
+    return HTMLResponse(to_xml(_render_robot_stats_panel(ev, robot, db)))
 
 
 # ---------------------------------------------------------------------------
