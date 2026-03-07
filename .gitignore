@@ -14,3 +14,6 @@ wheels/
 
 # sqlite database file
 bitbt.db
+
+# Image Uploads
+static/uploads/

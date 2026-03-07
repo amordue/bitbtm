@@ -80,8 +80,13 @@ def upsert_robot(
 ) -> Robot:
     """Find or create the robot referenced by a registration row."""
     row_id = registration["sheet_row_id"]
+    image_url = registration.get("image_url")
     robot = db.query(Robot).filter(Robot.sheet_row_id == row_id).first()
     if robot:
+        # Keep user-uploaded images intact, but allow sheet refreshes to backfill
+        # or replace sheet-managed images on existing robots.
+        if image_url and import_image and robot.image_source != ImageSource.upload:
+            import_image(robot, image_url)
         return robot
 
     roboteer = upsert_roboteer(registration, sheet_id, db)
@@ -95,7 +100,6 @@ def upsert_robot(
     db.add(robot)
     db.flush()
 
-    image_url = registration.get("image_url")
     if image_url and import_image:
         import_image(robot, image_url)
 

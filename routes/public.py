@@ -38,6 +38,7 @@ from fasthtml.common import (
     Thead,
     Tr,
     Ul,
+    Script,
     Form as HForm,
     to_xml,
 )
@@ -191,6 +192,90 @@ h3 { font-size: 0.95rem; font-weight: 600; margin-bottom: 0.5rem; }
     flex-wrap: wrap;
 }
 .history-score { font-weight: 700; color: #f8fafc; }
+.robot-page-shell { max-width: 1080px; }
+.robot-detail-hero {
+    display: grid;
+    gap: 1.25rem;
+    align-items: start;
+}
+.robot-detail-copy { min-width: 0; }
+.robot-detail-actions {
+    display: flex;
+    gap: 0.6rem;
+    flex-wrap: wrap;
+    margin-bottom: 1rem;
+}
+.robot-detail-photo-wrap {
+    margin: 0.4rem 0 1.35rem;
+    width: min(100%, 540px);
+}
+.robot-detail-photo-button {
+    display: block;
+    width: 100%;
+    padding: 0;
+    border: none;
+    background: transparent;
+    cursor: zoom-in;
+    text-align: left;
+}
+.robot-detail-photo {
+    display: block;
+    width: 100%;
+    aspect-ratio: 1 / 1;
+    object-fit: cover;
+    border-radius: 16px;
+    border: 1px solid #2a2a2a;
+    background: #141414;
+    box-shadow: 0 18px 40px rgba(0, 0, 0, 0.28);
+}
+.robot-detail-photo-hint {
+    display: inline-block;
+    margin-top: 0.55rem;
+    color: #7b7b7b;
+    font-size: 0.78rem;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+}
+.robot-lightbox {
+    position: fixed;
+    inset: 0;
+    z-index: 1200;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+    background: rgba(6, 8, 12, 0.88);
+}
+.robot-lightbox[hidden] { display: none; }
+.robot-lightbox-frame {
+    position: relative;
+    width: min(96vw, 980px);
+}
+.robot-lightbox-image {
+    display: block;
+    width: 100%;
+    max-height: 88vh;
+    object-fit: contain;
+    border-radius: 18px;
+    border: 1px solid #2d2d2d;
+    background: #101010;
+    box-shadow: 0 28px 80px rgba(0, 0, 0, 0.45);
+}
+.robot-lightbox-close {
+    position: absolute;
+    top: 0.85rem;
+    right: 0.85rem;
+    z-index: 1;
+    background: rgba(15, 23, 42, 0.88);
+    color: #f8fafc;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+}
+.robot-lightbox-caption {
+    margin-top: 0.75rem;
+    color: #cbd5e1;
+    text-align: center;
+    font-size: 0.9rem;
+}
 .live-grid {
     display: grid;
     grid-template-columns: minmax(0, 1.4fr) minmax(320px, 1fr);
@@ -288,6 +373,62 @@ h3 { font-size: 0.95rem; font-weight: 600; margin-bottom: 0.5rem; }
     .live-vs { text-align: center; }
     .board-header { align-items: start; }
 }
+@media (min-width: 900px) {
+    .robot-detail-hero {
+        grid-template-columns: minmax(0, 1fr) minmax(340px, 540px);
+        gap: 2rem;
+    }
+    .robot-detail-photo-wrap {
+        justify-self: end;
+        margin: 0;
+    }
+}
+"""
+
+_ROBOT_DETAIL_SCRIPT = """
+document.addEventListener('click', function (event) {
+    const trigger = event.target.closest('[data-lightbox-src]');
+    if (trigger) {
+        const panel = trigger.closest('[id^="robot-panel-"]');
+        if (!panel) {
+            return;
+        }
+        const lightbox = panel.querySelector('.robot-lightbox');
+        const image = lightbox ? lightbox.querySelector('.robot-lightbox-image') : null;
+        const caption = lightbox ? lightbox.querySelector('.robot-lightbox-caption') : null;
+        if (!lightbox || !image) {
+            return;
+        }
+        image.src = trigger.dataset.lightboxSrc || '';
+        image.alt = trigger.dataset.lightboxAlt || '';
+        if (caption) {
+            caption.textContent = trigger.dataset.lightboxCaption || '';
+        }
+        lightbox.hidden = false;
+        document.body.style.overflow = 'hidden';
+        return;
+    }
+
+    const closeButton = event.target.closest('[data-lightbox-close]');
+    const overlay = event.target.classList && event.target.classList.contains('robot-lightbox')
+        ? event.target
+        : null;
+    const lightbox = closeButton ? closeButton.closest('.robot-lightbox') : overlay;
+    if (lightbox) {
+        lightbox.hidden = true;
+        document.body.style.overflow = '';
+    }
+});
+
+document.addEventListener('keydown', function (event) {
+    if (event.key !== 'Escape') {
+        return;
+    }
+    document.querySelectorAll('.robot-lightbox').forEach(function (lightbox) {
+        lightbox.hidden = true;
+    });
+    document.body.style.overflow = '';
+});
 """
 
 
@@ -300,6 +441,15 @@ def _page(title: str, *body_content) -> HTMLResponse:
     return page_response(
         title,
         Div(*body_content, cls="content"),
+        css=_CSS,
+        script_srcs=(HTMX_SCRIPT_URL,),
+    )
+
+
+def _robot_page(title: str, *body_content) -> HTMLResponse:
+    return page_response(
+        title,
+        Div(*body_content, Script(_ROBOT_DETAIL_SCRIPT), cls="content robot-page-shell"),
         css=_CSS,
         script_srcs=(HTMX_SCRIPT_URL,),
     )
@@ -531,10 +681,34 @@ def _render_robot_fights_panel(ev: Event, robot: Robot, db: Session) -> Div:
 
     thumb = ""
     if robot.image_url:
-        thumb = Img(
-            src=robot.image_url,
-            style="width:80px;height:80px;object-fit:cover;border-radius:8px;margin-bottom:1rem;",
-            alt=robot.robot_name,
+        thumb = Div(
+            Button(
+                Img(
+                    src=robot.image_url,
+                    cls="robot-detail-photo",
+                    alt=robot.robot_name,
+                ),
+                Span("Tap to expand", cls="robot-detail-photo-hint"),
+                cls="robot-detail-photo-button",
+                type="button",
+                data_lightbox_src=robot.image_url,
+                data_lightbox_alt=f"{robot.robot_name} full size image",
+                data_lightbox_caption=robot.robot_name,
+            ),
+            cls="robot-detail-photo-wrap",
+        )
+
+    lightbox = ""
+    if robot.image_url:
+        lightbox = Div(
+            Div(
+                Button("Close", cls="btn btn-sm robot-lightbox-close", type="button", data_lightbox_close="true"),
+                Img(src=robot.image_url, cls="robot-lightbox-image", alt=robot.robot_name),
+                P(robot.robot_name, cls="robot-lightbox-caption"),
+                cls="robot-lightbox-frame",
+            ),
+            cls="robot-lightbox",
+            hidden=True,
         )
 
     fights_section = Div(
@@ -555,25 +729,31 @@ def _render_robot_fights_panel(ev: Event, robot: Robot, db: Session) -> Div:
 
     return Div(
         A("<- Robot lookup", href=f"/events/{ev.id}/lookup", cls="btn btn-sm btn-secondary", style="margin-bottom:1.2rem;display:inline-block;"),
-        thumb,
-        H1(robot.robot_name),
-        P(
-            Span(robot.roboteer.roboteer_name, style="color:#888;"),
-            Span(f" · {robot.weapon_type}", style="color:#555;") if robot.weapon_type else "",
-            cls="subtitle",
-        ),
         Div(
-            Span(f"{completed_fights} fight(s) played", style="color:#888;font-size:0.88rem;"),
-            " · ",
-            Span(f"{total_points} pts total", style="color:#60a5fa;font-size:0.88rem;font-weight:600;"),
-            style="margin-bottom:0.9rem;",
+            Div(
+                H1(robot.robot_name),
+                P(
+                    Span(robot.roboteer.roboteer_name, style="color:#888;"),
+                    Span(f" · {robot.weapon_type}", style="color:#555;") if robot.weapon_type else "",
+                    cls="subtitle",
+                ),
+                Div(
+                    Span(f"{completed_fights} fight(s) played", style="color:#888;font-size:0.88rem;"),
+                    " · ",
+                    Span(f"{total_points} pts total", style="color:#60a5fa;font-size:0.88rem;font-weight:600;"),
+                    style="margin-bottom:0.9rem;",
+                ),
+                Div(
+                    A("Detailed history", href=f"/events/{ev.id}/robot/{robot.id}/history", cls="btn btn-sm btn-secondary"),
+                    A("Robot stats", href=f"/events/{ev.id}/robot/{robot.id}/stats", cls="btn btn-sm btn-secondary"),
+                    cls="robot-detail-actions",
+                ),
+                cls="robot-detail-copy",
+            ),
+            thumb,
+            cls="robot-detail-hero",
         ),
-        Div(
-            A("Detailed history", href=f"/events/{ev.id}/robot/{robot.id}/history", cls="btn btn-sm btn-secondary"),
-            " ",
-            A("Robot stats", href=f"/events/{ev.id}/robot/{robot.id}/stats", cls="btn btn-sm btn-secondary"),
-            style="margin-bottom:1rem;",
-        ),
+        lightbox,
         fights_section,
         **panel_attrs,
     )
@@ -1015,7 +1195,7 @@ def robot_fights(
 
     if not _robot_has_event_history(robot_id, event_id, db):
         return _not_found()
-    return _page(
+    return _robot_page(
         f"{robot.robot_name} — {ev.event_name}",
         _event_topbar(ev, "lookup", db=db),
         _render_robot_fights_panel(ev, robot, db),

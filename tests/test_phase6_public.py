@@ -88,7 +88,12 @@ class Phase6PublicViewsTests(unittest.TestCase):
             db.flush()
 
             robots = [
-                Robot(robot_name="Alpha", roboteer_id=roboteers[0].id, weapon_type="Vertical spinner"),
+                Robot(
+                    robot_name="Alpha",
+                    roboteer_id=roboteers[0].id,
+                    weapon_type="Vertical spinner",
+                    image_url="https://example.com/alpha.png",
+                ),
                 Robot(robot_name="Beta", roboteer_id=roboteers[1].id, weapon_type="Hammer"),
                 Robot(robot_name="Gamma", roboteer_id=roboteers[2].id, weapon_type="Lifter"),
                 Robot(robot_name="Delta", roboteer_id=roboteers[3].id, weapon_type="Drum"),
@@ -286,6 +291,26 @@ class Phase6PublicViewsTests(unittest.TestCase):
         self.assertIn("Delta", response.text)
         self.assertIn("5-1", response.text)
         self.assertIn("2-4", response.text)
+
+    def test_robot_page_places_large_image_below_summary(self):
+        response = self.client.get(
+            f"/events/{self.ids['event_id']}/robot/{self.ids['alpha_id']}"
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('class="content robot-page-shell"', response.text)
+        self.assertIn('class="robot-detail-hero"', response.text)
+        self.assertIn('class="robot-detail-photo-button"', response.text)
+        self.assertIn('<div hidden class="robot-lightbox">', response.text)
+        self.assertIn('data-lightbox-src="https://example.com/alpha.png"', response.text)
+        self.assertLess(
+            response.text.index("<h1>Alpha</h1>"),
+            response.text.index('class="robot-detail-photo-button"'),
+        )
+        self.assertLess(
+            response.text.index("2 fight(s) played"),
+            response.text.index('class="robot-detail-photo-button"'),
+        )
 
     def test_qr_page_embeds_svg_endpoint(self):
         page_response = self.client.get(f"/events/{self.ids['event_id']}/qr")

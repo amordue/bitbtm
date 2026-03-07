@@ -1,11 +1,14 @@
 """Organizer-only admin routes — Phase 4 & 5: Event Management, Import, Matching & Scoring."""
 
+import mimetypes
 import os
+import re
 import urllib.error
 import urllib.request
 import uuid
 from pathlib import Path
 from typing import Optional
+from urllib.parse import parse_qs, urlencode, urlparse
 
 from fastapi import APIRouter, Depends, File, Form, Query, Request, UploadFile
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
@@ -196,6 +199,27 @@ _TRANSITION_LABELS: dict[EventStatus, str] = {
 
 def _status_badge(status: EventStatus) -> Span:
     return status_badge(status)
+
+
+def _refresh_sheet_action(event_id: int, has_sheet_url: bool):
+    """Render the refresh-sheet control or a setup link when no sheet is saved."""
+    if not has_sheet_url:
+        return A(
+            "Set Sheet URL",
+            href=f"/admin/events/{event_id}/import",
+            cls="btn btn-sm btn-secondary",
+        )
+
+    return HForm(
+        Button(
+            "Refresh From Sheet",
+            type="submit",
+            cls="btn btn-sm btn-secondary",
+        ),
+        method="post",
+        action=f"/admin/events/{event_id}/refresh-sheet",
+        style="display:inline;",
+    )
 
 
 def _topbar(user: User) -> Header:
@@ -399,6 +423,7 @@ def event_detail(
     user: User = Depends(require_organizer),
     db: Session = Depends(get_db),
     msg: str = Query(default=""),
+    img_warn: list[str] = Query(default=[]),
 ):
     ev = _get_event_or_404(event_id, user.id, db)
 
@@ -433,6 +458,17 @@ def event_detail(
     if msg in flash_map:
         text, kind = flash_map[msg]
         flash = Div(text, cls=f"alert alert-{kind}")
+
+    warning_flash = ""
+    if img_warn:
+        warning_flash = Div(
+            P(
+                "Some robot images could not be downloaded; the original sheet URLs were kept instead.",
+                style="margin-bottom:0.5rem;",
+            ),
+            Ul(*(Li(warning) for warning in img_warn)),
+            cls="alert alert-error",
+        )
 
     # Active robots and reserves
     active_ers = active_event_robots(event_id, db)
@@ -469,6 +505,8 @@ def event_detail(
                 _status_badge(ev.status),
                 " ",
                 transition_btn,
+                " ",
+                _refresh_sheet_action(event_id, bool(ev.google_sheet_url)),
                 " ",
                 A("Import / Refresh Robots", href=f"/admin/events/{event_id}/import", cls="btn btn-sm btn-primary"),
                 style="display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap;",
@@ -662,6 +700,7 @@ def event_detail(
     page = Div(
         A("← Dashboard", href="/admin/", cls="btn btn-sm btn-secondary", style="margin-bottom:1.2rem;display:inline-block;"),
         flash if flash else "",
+        warning_flash if warning_flash else "",
         header_card,
         active_card,
         reserves_card,
@@ -786,6 +825,17 @@ def import_page(
         style="margin-bottom:1rem;",
     )
 
+    refresh_action = ""
+    if ev.google_sheet_url:
+        refresh_action = Div(
+            P(
+                "Already imported robots for this event? Refresh the roster from the saved event sheet URL.",
+                style="color:#888;font-size:0.9rem;margin:0 0 0.5rem;",
+            ),
+            _refresh_sheet_action(event_id, True),
+            style="margin-bottom:1rem;",
+        )
+
     page = Div(
         A("← Event", href=f"/admin/events/{event_id}", cls="btn btn-sm btn-secondary", style="margin-bottom:1.2rem;display:inline-block;"),
         H1(f"Import Robots — {ev.event_name}"),
@@ -796,6 +846,7 @@ def import_page(
                 "Select the rows to import and optionally mark any as reserves.",
                 style="color:#888;font-size:0.9rem;margin-bottom:1rem;",
             ),
+            refresh_action,
             sheet_url_field,
             preview_trigger,
             Div(id="preview-area"),
@@ -959,17 +1010,21 @@ def do_import(
         )
 
     _, registrations = load_registrations(rows, sheet_url)
+    image_warnings: list[str] = []
     import_selected_event_registrations(
         event_id,
         registrations,
         row_ids,
         reserve_ids,
         db,
-        import_image=_try_import_image,
+        import_image=_image_importer_with_warnings(access_token, image_warnings),
     )
 
     db.commit()
-    return RedirectResponse(f"/admin/events/{event_id}?msg=imported", status_code=303)
+    return RedirectResponse(
+        _event_redirect_url(event_id, "imported", image_warnings),
+        status_code=303,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -1003,15 +1058,19 @@ def refresh_sheet(
         )
 
     _, registrations = load_registrations(rows, ev.google_sheet_url)
+    image_warnings: list[str] = []
     refresh_event_registrations(
         event_id,
         registrations,
         db,
-        import_image=_try_import_image,
+        import_image=_image_importer_with_warnings(access_token, image_warnings),
     )
 
     db.commit()
-    return RedirectResponse(f"/admin/events/{event_id}?msg=refreshed", status_code=303)
+    return RedirectResponse(
+        _event_redirect_url(event_id, "refreshed", image_warnings),
+        status_code=303,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -1563,31 +1622,171 @@ def _get_event_or_404(event_id: int, organizer_id: int, db: Session) -> Event:
     return ev
 
 
-def _try_import_image(robot: Robot, image_url: str) -> None:
+def _google_drive_file_id(image_url: str) -> str | None:
+    """Extract a Google Drive file id from common sharing URL formats."""
+    parsed = urlparse(image_url)
+    query_id = parse_qs(parsed.query).get("id")
+    if query_id:
+        return query_id[0]
+
+    for pattern in (
+        r"/file/d/([a-zA-Z0-9_-]+)",
+        r"/document/d/([a-zA-Z0-9_-]+)",
+        r"/spreadsheets/d/([a-zA-Z0-9_-]+)",
+        r"/presentation/d/([a-zA-Z0-9_-]+)",
+    ):
+        match = re.search(pattern, parsed.path)
+        if match:
+            return match.group(1)
+
+    return None
+
+
+def _event_redirect_url(event_id: int, msg: str, image_warnings: list[str] | None = None) -> str:
+    """Build the event detail redirect URL with optional image import warnings."""
+    query_params: list[tuple[str, str]] = [("msg", msg)]
+    if image_warnings:
+        trimmed_warnings = image_warnings[:5]
+        query_params.extend(("img_warn", warning) for warning in trimmed_warnings)
+        remaining = len(image_warnings) - len(trimmed_warnings)
+        if remaining > 0:
+            query_params.append(
+                ("img_warn", f"... and {remaining} more image import warning(s).")
+            )
+    return f"/admin/events/{event_id}?{urlencode(query_params, doseq=True)}"
+
+
+def _image_importer_with_warnings(access_token: str | None, image_warnings: list[str]):
+    """Wrap image imports so failures are shown to the organizer after redirect."""
+
+    def importer(robot: Robot, image_url: str) -> None:
+        warning = _try_import_image(robot, image_url, access_token=access_token)
+        if warning:
+            image_warnings.append(f"{robot.robot_name}: {warning}")
+
+    return importer
+
+
+def _build_image_request(image_url: str, access_token: str | None) -> tuple[str, urllib.request.Request]:
+    """Return the resolved image URL and the HTTP request used to fetch it."""
+    resolved_url = image_url
+    headers = {"User-Agent": "BitBT/1.0"}
+    drive_file_id = _google_drive_file_id(image_url)
+    if drive_file_id and access_token:
+        resolved_url = f"https://www.googleapis.com/drive/v3/files/{drive_file_id}?alt=media"
+        headers["Authorization"] = f"Bearer {access_token}"
+    return resolved_url, urllib.request.Request(resolved_url, headers=headers)
+
+
+def _image_extension(original_url: str, resolved_url: str, content_type: str | None) -> str:
+    """Choose a safe image extension from MIME type or URL hints."""
+    allowed_exts = {".jpg", ".jpeg", ".png", ".gif", ".webp"}
+
+    if content_type:
+        mime_type = content_type.split(";", 1)[0].strip().lower()
+        if mime_type and mime_type not in {"application/octet-stream", "binary/octet-stream"} and not mime_type.startswith("image/"):
+            raise ValueError("Imported file is not an image")
+        guessed = mimetypes.guess_extension(mime_type) if mime_type else None
+        if guessed == ".jpe":
+            guessed = ".jpg"
+        if guessed in allowed_exts:
+            return guessed
+
+    for candidate in (original_url, resolved_url):
+        ext = Path(candidate.split("?", 1)[0]).suffix.lower()
+        if ext in allowed_exts:
+            return ext
+
+    return ".jpg"
+
+
+def _image_extension_from_headers(headers) -> str | None:
+    """Infer a safe image extension from download headers when MIME type is generic."""
+    if headers is None or not hasattr(headers, "get"):
+        return None
+
+    content_disposition = headers.get("Content-Disposition") or headers.get("content-disposition")
+    if not content_disposition:
+        return None
+
+    # Handle both `filename="robot.png"` and RFC 5987 `filename*=UTF-8''robot.png` forms.
+    for pattern in (
+        r"filename\*=UTF-8''([^;]+)",
+        r'filename="?([^";]+)"?',
+    ):
+        match = re.search(pattern, content_disposition, flags=re.IGNORECASE)
+        if not match:
+            continue
+        filename = match.group(1).strip()
+        if not filename:
+            continue
+        ext = Path(filename).suffix.lower()
+        if ext in {".jpg", ".jpeg", ".png", ".gif", ".webp"}:
+            return ext
+
+    return None
+
+
+def _http_error_summary(exc: urllib.error.HTTPError) -> str:
+    """Return a concise summary of an HTTP error response."""
+    detail = f"HTTP {exc.code} {exc.reason}"
+    headers = getattr(exc, "headers", None)
+    if headers is not None and hasattr(headers, "get_content_type"):
+        content_type = headers.get_content_type()
+        if content_type:
+            detail = f"{detail} ({content_type})"
+
+    try:
+        body = exc.read(200)
+    except Exception:
+        body = b""
+    if body:
+        snippet = " ".join(body.decode("utf-8", errors="ignore").split())[:140]
+        if snippet:
+            detail = f"{detail}: {snippet}"
+    return detail
+
+
+def _try_import_image(robot: Robot, image_url: str, access_token: str | None = None) -> str | None:
     """Attempt to download an image from a URL and save it locally.
 
     Falls back to storing the URL directly if the download fails.
     Only attempts HTTP/HTTPS URLs to prevent SSRF against internal services.
     """
     if not image_url.startswith(("http://", "https://")):
-        return
+        return "unsupported image URL scheme"
     try:
-        ext = Path(image_url.split("?")[0]).suffix.lower() or ".jpg"
-        allowed_exts = {".jpg", ".jpeg", ".png", ".gif", ".webp"}
-        if ext not in allowed_exts:
-            ext = ".jpg"
+        resolved_url, req = _build_image_request(image_url, access_token)
+        with urllib.request.urlopen(req, timeout=5) as response:
+            content_type = None
+            headers = getattr(response, "headers", None)
+            if headers is not None and hasattr(headers, "get_content_type"):
+                content_type = headers.get_content_type()
+            ext = _image_extension(image_url, resolved_url, content_type)
+            if ext == ".jpg" and content_type in {"application/octet-stream", "binary/octet-stream"}:
+                ext = _image_extension_from_headers(headers) or ext
+            image_bytes = response.read()
+
         filename = f"{uuid.uuid4().hex}{ext}"
         dest = Path(UPLOAD_DIR) / filename
         dest.parent.mkdir(parents=True, exist_ok=True)
-        req = urllib.request.Request(image_url, headers={"User-Agent": "BitBT/1.0"})
-        with urllib.request.urlopen(req, timeout=5) as response:
-            dest.write_bytes(response.read())
+        dest.write_bytes(image_bytes)
         robot.image_url = f"/static/uploads/{filename}"
         robot.image_source = ImageSource.upload
-    except (urllib.error.URLError, OSError, ValueError):
-        # Fallback: store the URL reference without downloading
-        robot.image_url = image_url
-        robot.image_source = ImageSource.sheet
+        return None
+    except urllib.error.HTTPError as exc:
+        warning = _http_error_summary(exc)
+    except urllib.error.URLError as exc:
+        warning = f"network error: {exc.reason}"
+    except ValueError as exc:
+        warning = str(exc)
+    except OSError as exc:
+        warning = f"filesystem error: {exc}"
+
+    # Fallback: store the URL reference without downloading
+    robot.image_url = image_url
+    robot.image_source = ImageSource.sheet
+    return warning
 
 
 # ---------------------------------------------------------------------------
