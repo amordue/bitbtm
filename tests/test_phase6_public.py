@@ -287,22 +287,100 @@ class Phase6PublicViewsTests(unittest.TestCase):
         self.assertIn("5-1", response.text)
         self.assertIn("2-4", response.text)
 
+    def test_qr_page_embeds_svg_endpoint(self):
+        page_response = self.client.get(f"/events/{self.ids['event_id']}/qr")
+        svg_response = self.client.get(f"/events/{self.ids['event_id']}/qr.svg")
+
+        self.assertEqual(page_response.status_code, 200)
+        self.assertIn("Event QR Code", page_response.text)
+        self.assertIn(
+            f'<img src="/events/{self.ids["event_id"]}/qr.svg"',
+            page_response.text,
+        )
+        self.assertIn("Open event page", page_response.text)
+        self.assertNotIn("<?xml", page_response.text)
+
+        self.assertEqual(svg_response.status_code, 200)
+        self.assertEqual(svg_response.headers["content-type"], "image/svg+xml")
+        self.assertIn("<?xml", svg_response.text)
+        self.assertIn("<svg", svg_response.text)
+
     def test_public_views_include_auto_refresh_panels(self):
+        overview_response = self.client.get(f"/events/{self.ids['event_id']}")
         leaderboard_response = self.client.get(f"/events/{self.ids['event_id']}/leaderboard")
+        bracket_response = self.client.get(f"/events/{self.ids['event_id']}/bracket")
+        live_response = self.client.get(f"/events/{self.ids['event_id']}/live")
+        next_up_response = self.client.get(f"/events/{self.ids['event_id']}/next-up")
         robot_response = self.client.get(
             f"/events/{self.ids['event_id']}/robot/{self.ids['alpha_id']}"
         )
+        history_response = self.client.get(
+            f"/events/{self.ids['event_id']}/robot/{self.ids['alpha_id']}/history"
+        )
+        stats_response = self.client.get(
+            f"/events/{self.ids['event_id']}/robot/{self.ids['alpha_id']}/stats"
+        )
 
+        self.assertEqual(overview_response.status_code, 200)
         self.assertEqual(leaderboard_response.status_code, 200)
+        self.assertEqual(bracket_response.status_code, 200)
+        self.assertEqual(live_response.status_code, 200)
+        self.assertEqual(next_up_response.status_code, 200)
         self.assertEqual(robot_response.status_code, 200)
+        self.assertEqual(history_response.status_code, 200)
+        self.assertEqual(stats_response.status_code, 200)
+        self.assertIn(
+            f'hx-get="/events/{self.ids["event_id"]}/overview-panel"',
+            overview_response.text,
+        )
+        self.assertIn('hx-trigger="every 20s"', overview_response.text)
+        self.assertNotIn('hx-trigger="load, every 20s"', overview_response.text)
         self.assertIn(
             f'hx-get="/events/{self.ids["event_id"]}/leaderboard/panel"',
             leaderboard_response.text,
         )
+        self.assertIn('hx-trigger="every 20s"', leaderboard_response.text)
+        self.assertIn(
+            f'hx-get="/events/{self.ids["event_id"]}/bracket/panel"',
+            bracket_response.text,
+        )
+        self.assertIn('hx-trigger="every 20s"', bracket_response.text)
+        self.assertIn(
+            f'hx-get="/events/{self.ids["event_id"]}/live/panel"',
+            live_response.text,
+        )
+        self.assertIn('hx-trigger="every 15s"', live_response.text)
+        self.assertIn(
+            f'hx-get="/events/{self.ids["event_id"]}/next-up/panel"',
+            next_up_response.text,
+        )
+        self.assertIn('hx-trigger="every 20s"', next_up_response.text)
         self.assertIn(
             f'hx-get="/events/{self.ids["event_id"]}/robot/{self.ids["alpha_id"]}/panel"',
             robot_response.text,
         )
+        self.assertIn('hx-trigger="every 20s"', robot_response.text)
+        self.assertIn(
+            f'hx-get="/events/{self.ids["event_id"]}/robot/{self.ids["alpha_id"]}/history/panel"',
+            history_response.text,
+        )
+        self.assertIn('hx-trigger="every 20s"', history_response.text)
+        self.assertIn(
+            f'hx-get="/events/{self.ids["event_id"]}/robot/{self.ids["alpha_id"]}/stats/panel"',
+            stats_response.text,
+        )
+        self.assertIn('hx-trigger="every 20s"', stats_response.text)
+        for response in (
+            overview_response,
+            leaderboard_response,
+            bracket_response,
+            live_response,
+            next_up_response,
+            robot_response,
+            history_response,
+            stats_response,
+        ):
+            self.assertNotIn('hx-trigger="load, every ', response.text)
 
 
 if __name__ == "__main__":

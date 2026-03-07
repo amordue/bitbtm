@@ -28,7 +28,6 @@ from fasthtml.common import (
     Input,
     Label,
     Li,
-    NotStr,
     P,
     Small,
     Span,
@@ -130,7 +129,14 @@ h3 { font-size: 0.95rem; font-weight: 600; margin-bottom: 0.5rem; }
     display: flex; flex-direction: column; align-items: center;
     gap: 1rem; padding: 1.5rem 0;
 }
-.qr-wrap svg { background: #fff; padding: 12px; border-radius: 8px; }
+.qr-wrap img {
+    display: block;
+    width: min(100%, 320px);
+    height: auto;
+    background: #fff;
+    padding: 12px;
+    border-radius: 8px;
+}
 .qr-url {
     font-size: 0.82rem; color: #888; word-break: break-all; text-align: center;
     max-width: 360px;
@@ -347,7 +353,9 @@ def _event_is_live(ev: Event) -> bool:
 def _auto_refresh_attrs(path: str, interval: str = "20s") -> dict[str, str]:
     return {
         "hx_get": path,
-        "hx_trigger": f"load, every {interval}",
+        # Avoid a request loop: swapped panels re-enter the DOM, so `load`
+        # would fire again immediately after every outerHTML refresh.
+        "hx_trigger": f"every {interval}",
         "hx_swap": "outerHTML",
         "cls": "auto-panel",
     }
@@ -1165,7 +1173,7 @@ def qr_page(event_id: int, db: Session = Depends(get_db)):
         return _not_found()
 
     event_url = f"{APP_BASE_URL}/events/{event_id}"
-    svg_data = _make_qr_svg(event_url)
+    qr_image_url = f"/events/{event_id}/qr.svg"
 
     return _page(
         f"QR Code — {ev.event_name}",
@@ -1179,7 +1187,7 @@ def qr_page(event_id: int, db: Session = Depends(get_db)):
                     style="color:#888;font-size:0.88rem;text-align:center;",
                 ),
                 Div(
-                    NotStr(svg_data),
+                    Img(src=qr_image_url, alt=f"QR code for {ev.event_name}"),
                     P(event_url, cls="qr-url"),
                     A("Open event page", href=event_url, cls="btn btn-primary btn-sm"),
                     cls="qr-wrap",
