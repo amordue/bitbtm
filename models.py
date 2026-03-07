@@ -178,6 +178,7 @@ class Matchup(Base):
     robot2_id = Column(Integer, ForeignKey("robots.id"))   # NULL = bye
     status = Column(Enum(MatchupStatus), default=MatchupStatus.pending, nullable=False)
     display_order = Column(Integer, default=0)
+    bracket_round = Column(Integer)   # NULL for qualifying; 1=R16, 2=QF, 3=SF, 4=Final
 
     phase = relationship("Phase", back_populates="matchups")
     robot1 = relationship("Robot", foreign_keys=[robot1_id])
