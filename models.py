@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import UTC, datetime
 from enum import Enum as PyEnum
 
 from sqlalchemy import (
@@ -17,6 +17,11 @@ from sqlalchemy.orm import DeclarativeBase, relationship
 
 class Base(DeclarativeBase):
     pass
+
+
+def utc_now() -> datetime:
+    """Return the current UTC time as a timezone-aware datetime."""
+    return datetime.now(UTC)
 
 
 # ---------------------------------------------------------------------------
@@ -85,7 +90,7 @@ class User(Base):
     access_token = Column(Text)
     refresh_token = Column(Text)
     token_expiry = Column(DateTime)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
 
     events = relationship("Event", back_populates="organizer")
 
@@ -98,7 +103,7 @@ class Roboteer(Base):
     roboteer_name = Column(String, nullable=False)
     contact_email = Column(String)
     imported_from_sheet_id = Column(String)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
 
     robots = relationship("Robot", back_populates="roboteer")
 
@@ -114,7 +119,7 @@ class Robot(Base):
     sheet_row_id = Column(String)          # original row identifier from Google Sheet
     image_url = Column(String)
     image_source = Column(Enum(ImageSource), default=ImageSource.none)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
 
     roboteer = relationship("Roboteer", back_populates="robots")
     event_registrations = relationship("EventRobot", back_populates="robot")
@@ -130,7 +135,7 @@ class Event(Base):
     google_sheet_url = Column(String)
     status = Column(Enum(EventStatus), default=EventStatus.setup, nullable=False)
     organizer_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
 
     organizer = relationship("User", back_populates="events")
     event_robots = relationship("EventRobot", back_populates="event")
@@ -257,7 +262,7 @@ class RobotRetirement(Base):
     retired_robot_id = Column(Integer, ForeignKey("robots.id"), nullable=False)
     replacement_robot_id = Column(Integer, ForeignKey("robots.id"))
     retired_after_phase_id = Column(Integer, ForeignKey("phases.id"), nullable=False)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
 
     retired_robot = relationship("Robot", foreign_keys=[retired_robot_id])
     replacement_robot = relationship("Robot", foreign_keys=[replacement_robot_id])

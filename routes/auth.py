@@ -4,34 +4,23 @@ from fastapi import APIRouter, Depends, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fasthtml.common import (
     A,
-    Body,
     Div,
     H1,
-    Head,
-    Html,
-    Meta,
     P,
-    Style,
-    Title,
-    to_xml,
 )
 from sqlalchemy.orm import Session
 
 from auth import exchange_code_for_tokens, get_authorization_url, get_user_info, upsert_user
 from database import get_db
+from ui import page_response
 
 router = APIRouter()
 
 _LOGIN_CSS = """
-* { box-sizing: border-box; margin: 0; padding: 0; }
 body {
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-    background: #111;
-    color: #f0f0f0;
     display: flex;
     align-items: center;
     justify-content: center;
-    min-height: 100vh;
 }
 .card {
     background: #1e1e1e;
@@ -68,24 +57,17 @@ def login_page(error: str = ""):
         cls="error",
     ) if error else ""
 
-    page = Html(
-        Head(
-            Meta(charset="utf-8"),
-            Meta(name="viewport", content="width=device-width, initial-scale=1"),
-            Title("Sign In — BitBT"),
-            Style(_LOGIN_CSS),
+    return page_response(
+        "Sign In",
+        Div(
+            H1("⚙ BitBT"),
+            P("Robot Combat Tournament Manager", cls="subtitle"),
+            error_el,
+            A("Sign in with Google", href="/auth/google", cls="btn-google"),
+            cls="card",
         ),
-        Body(
-            Div(
-                H1("⚙ BitBT"),
-                P("Robot Combat Tournament Manager", cls="subtitle"),
-                error_el,
-                A("Sign in with Google", href="/auth/google", cls="btn-google"),
-                cls="card",
-            )
-        ),
+        css=_LOGIN_CSS,
     )
-    return HTMLResponse(to_xml(page))
 
 
 @router.get("/auth/google")

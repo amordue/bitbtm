@@ -1,7 +1,7 @@
 """Google OAuth flow, session management, and organizer auth dependencies."""
 
 import os
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from typing import Optional
 
 from fastapi import Depends, HTTPException, Request, status
@@ -30,6 +30,15 @@ _CLIENT_CONFIG = {
         "redirect_uris": [_CALLBACK_URL],
     }
 }
+
+
+def _ensure_utc(value: Optional[datetime]) -> Optional[datetime]:
+    """Normalize datetimes from the database or OAuth client to UTC-aware values."""
+    if value is None:
+        return None
+    if value.tzinfo is None:
+        return value.replace(tzinfo=UTC)
+    return value.astimezone(UTC)
 
 
 def _create_flow(state: Optional[str] = None) -> Flow:
@@ -77,8 +86,9 @@ def get_user_info(access_token: str) -> dict:
 
 def get_valid_access_token(user: User, db: Session) -> str:
     """Return a valid access token, refreshing it automatically if expired."""
-    now = datetime.utcnow()
-    if user.token_expiry and user.token_expiry > now + timedelta(minutes=1):
+    now = datetime.now(UTC)
+    token_expiry = _ensure_utc(user.token_expiry)
+    if token_expiry and token_expiry > now + timedelta(minutes=1):
         return user.access_token  # still fresh
 
     creds = Credentials(
@@ -90,7 +100,7 @@ def get_valid_access_token(user: User, db: Session) -> str:
     )
     creds.refresh(GoogleRequest())
     user.access_token = creds.token
-    user.token_expiry = creds.expiry
+    user.token_expiry = _ensure_utc(creds.expiry)
     db.commit()
     return creds.token
 
@@ -117,7 +127,7 @@ def upsert_user(
     user.access_token = access_token
     if refresh_token:
         user.refresh_token = refresh_token
-    user.token_expiry = token_expiry
+    user.token_expiry = _ensure_utc(token_expiry)
     db.commit()
     db.refresh(user)
     return user

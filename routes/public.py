@@ -19,31 +19,24 @@ from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import HTMLResponse, Response
 from fasthtml.common import (
     A,
-    Body,
     Button,
     Div,
     H1,
     H2,
     H3,
-    Head,
-    Html,
     Img,
     Input,
     Label,
     Li,
-    Meta,
     NotStr,
     P,
-    Script,
     Small,
     Span,
-    Style,
     Table,
     Tbody,
     Td,
     Th,
     Thead,
-    Title,
     Tr,
     Ul,
     Form as HForm,
@@ -72,6 +65,7 @@ from models import (
     SubEventTeam,
 )
 from scoring import BYE_POINTS, points_to_outcome_label
+from ui import HTMX_SCRIPT_URL, page_response, status_badge
 
 router = APIRouter(prefix="/events")
 
@@ -80,16 +74,7 @@ router = APIRouter(prefix="/events")
 # ---------------------------------------------------------------------------
 
 _CSS = """
-* { box-sizing: border-box; margin: 0; padding: 0; }
-body {
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-    background: #111;
-    color: #f0f0f0;
-    min-height: 100vh;
-    padding-bottom: 3rem;
-}
-a { color: #60a5fa; text-decoration: none; }
-a:hover { text-decoration: underline; }
+body { padding-bottom: 3rem; }
 /* Top bar */
 .topbar {
     background: #161616;
@@ -108,65 +93,6 @@ h1 { font-size: 1.55rem; margin-bottom: 0.3rem; }
 h2 { font-size: 1.1rem; margin-bottom: 0.85rem; }
 h3 { font-size: 0.95rem; font-weight: 600; margin-bottom: 0.5rem; }
 .subtitle { color: #888; font-size: 0.88rem; margin-bottom: 1.4rem; }
-/* Cards */
-.card {
-    background: #1a1a1a;
-    border: 1px solid #2a2a2a;
-    border-radius: 8px;
-    padding: 1.25rem;
-    margin-bottom: 1.2rem;
-}
-/* Buttons */
-.btn {
-    display: inline-block;
-    padding: 0.55rem 1.1rem;
-    border-radius: 6px;
-    border: none;
-    font-size: 0.88rem;
-    font-weight: 600;
-    cursor: pointer;
-    text-decoration: none;
-    transition: opacity 0.15s;
-}
-.btn:hover { opacity: 0.85; text-decoration: none; }
-.btn-primary   { background: #3b82f6; color: #fff; }
-.btn-secondary { background: #2f2f2f; color: #ccc; border: 1px solid #3a3a3a; }
-.btn-sm { padding: 0.3rem 0.7rem; font-size: 0.78rem; }
-/* Forms */
-.form-group { margin-bottom: 1rem; }
-.form-group label { display: block; color: #aaa; font-size: 0.85rem; margin-bottom: 0.3rem; }
-.form-control {
-    width: 100%;
-    background: #111;
-    border: 1px solid #333;
-    border-radius: 6px;
-    color: #f0f0f0;
-    padding: 0.55rem 0.75rem;
-    font-size: 0.95rem;
-}
-.form-control:focus { outline: none; border-color: #3b82f6; }
-/* Tables */
-.table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
-table { width: 100%; border-collapse: collapse; font-size: 0.87rem; }
-th {
-    text-align: left; padding: 0.55rem 0.8rem; color: #888; font-weight: 600;
-    border-bottom: 1px solid #2a2a2a; white-space: nowrap;
-}
-td { padding: 0.5rem 0.8rem; border-bottom: 1px solid #1e1e1e; vertical-align: middle; }
-tr:last-child td { border-bottom: none; }
-/* Badges */
-.badge {
-    display: inline-block; padding: 0.18rem 0.5rem; border-radius: 99px;
-    font-size: 0.72rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.03em;
-}
-.badge-setup       { background: #1f2937; color: #9ca3af; }
-.badge-registration{ background: #1e3a5f; color: #60a5fa; }
-.badge-qualifying  { background: #1a3a26; color: #4ade80; }
-.badge-bracket     { background: #3b1a5f; color: #c084fc; }
-.badge-sub_events  { background: #3a2a10; color: #fcd34d; }
-.badge-complete    { background: #1a3a1a; color: #86efac; }
-.badge-pending     { background: #292929; color: #777; }
-.badge-completed   { background: #1a3a26; color: #4ade80; }
 /* Leaderboard rank */
 .rank-1 { color: #fbbf24; font-weight: 700; }
 .rank-2 { color: #d1d5db; font-weight: 700; }
@@ -176,16 +102,12 @@ tr:last-child td { border-bottom: none; }
 .fight-row-loss { border-left: 3px solid #ef4444; }
 .fight-row-draw { border-left: 3px solid #f59e0b; }
 .fight-row-pending { border-left: 3px solid #374151; }
-/* Robot image */
-.robot-thumb { width: 44px; height: 44px; object-fit: cover; border-radius: 6px; }
 /* Bracket round header */
 .round-header {
     font-size: 0.8rem; font-weight: 600; text-transform: uppercase;
     letter-spacing: 0.06em; color: #555; margin: 1.2rem 0 0.5rem;
     padding-bottom: 0.3rem; border-bottom: 1px solid #2a2a2a;
 }
-/* Empty */
-.empty { color: #555; padding: 1.5rem 0; text-align: center; font-size: 0.9rem; }
 /* Search results */
 .search-result-item {
     display: flex; align-items: center; gap: 0.75rem;
@@ -360,14 +282,12 @@ tr:last-child td { border-bottom: none; }
 
 
 def _page(title: str, *body_content) -> HTMLResponse:
-    head = Head(
-        Meta(charset="utf-8"),
-        Meta(name="viewport", content="width=device-width, initial-scale=1"),
-        Title(f"{title} — BitBT"),
-        Style(_CSS),
-        Script(src="https://unpkg.com/htmx.org@1.9.12"),
+    return page_response(
+        title,
+        Div(*body_content, cls="content"),
+        css=_CSS,
+        script_srcs=(HTMX_SCRIPT_URL,),
     )
-    return HTMLResponse(to_xml(Html(head, Body(Div(*body_content, cls="content")))))
 
 
 def _event_topbar(ev: Event, active: str = "", db: Optional[Session] = None) -> Div:
@@ -400,7 +320,7 @@ def _event_topbar(ev: Event, active: str = "", db: Optional[Session] = None) -> 
 
 
 def _status_badge(status: EventStatus) -> Span:
-    return Span(status.value, cls=f"badge badge-{status.value}")
+    return status_badge(status)
 
 
 def _get_public_event(event_id: int, db: Session) -> Optional[Event]:
@@ -1692,19 +1612,20 @@ def robot_stats_panel(event_id: int, robot_id: int, db: Session = Depends(get_db
 
 
 def _not_found() -> HTMLResponse:
-    return HTMLResponse(
-        to_xml(Html(
-            Head(Title("Not Found — BitBT"), Style(_CSS)),
-            Body(Div(
-                H1("Event not found"),
-                P("This event doesn't exist or may have been removed.", style="color:#888;"),
-                A("← Home", href="/", style="color:#60a5fa;"),
-                cls="content",
-                style="padding-top:3rem;text-align:center;",
-            )),
-        )),
-        status_code=404,
+    response = page_response(
+        "Not Found",
+        Div(
+            H1("Event not found"),
+            P("This event doesn't exist or may have been removed.", style="color:#888;"),
+            A("<- Home", href="/", style="color:#60a5fa;"),
+            cls="content",
+            style="padding-top:3rem;text-align:center;",
+        ),
+        css=_CSS,
+        script_srcs=(HTMX_SCRIPT_URL,),
     )
+    response.status_code = 404
+    return response
 
 
 # ===========================================================================

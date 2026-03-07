@@ -11,20 +11,16 @@ from fastapi import APIRouter, Depends, File, Form, Query, Request, UploadFile
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fasthtml.common import (
     A,
-    Body,
     Button,
     Div,
     H1,
     H2,
     H3,
-    Head,
     Header,
-    Html,
     Img,
     Input,
     Label,
     Li,
-    Meta,
     Nav,
     NotStr,
     Option,
@@ -34,13 +30,11 @@ from fasthtml.common import (
     Small,
     Span,
     Strong,
-    Style,
     Table,
     Tbody,
     Td,
     Th,
     Thead,
-    Title,
     Tr,
     Ul,
     Form as HForm,
@@ -93,6 +87,7 @@ from models import (
     User,
 )
 from scoring import BYE_POINTS, FIGHT_OUTCOMES, outcome_to_points, points_to_outcome_label
+from ui import HTMX_SCRIPT_URL, page_response, status_badge
 
 router = APIRouter(prefix="/admin")
 
@@ -101,7 +96,6 @@ router = APIRouter(prefix="/admin")
 # ---------------------------------------------------------------------------
 
 _CSS = """
-* { box-sizing: border-box; margin: 0; padding: 0; }
 /* Phase 5 extras */
 .matchup-list { list-style: none; }
 .matchup-item {
@@ -135,14 +129,6 @@ _CSS = """
 .bracket-robot-row + .bracket-robot-row { border-top: 1px solid #222; }
 .bracket-robot-winner { background: #0f2a18; }
 .bracket-robot-pts { margin-left: auto; font-weight: 700; font-size: 0.85rem; }
-body {
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-    background: #111;
-    color: #f0f0f0;
-    min-height: 100vh;
-}
-a { color: #60a5fa; text-decoration: none; }
-a:hover { text-decoration: underline; }
 .topbar {
     display: flex;
     justify-content: space-between;
@@ -159,101 +145,20 @@ a:hover { text-decoration: underline; }
 h1 { font-size: 1.7rem; margin-bottom: 1.5rem; }
 h2 { font-size: 1.2rem; margin-bottom: 1rem; }
 h3 { font-size: 1rem; font-weight: 600; margin-bottom: 0.75rem; }
-.card {
-    background: #1a1a1a;
-    border: 1px solid #2a2a2a;
-    border-radius: 8px;
-    padding: 1.5rem;
-    margin-bottom: 1.5rem;
-}
+.card { padding: 1.5rem; margin-bottom: 1.5rem; }
 .card-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
     margin-bottom: 1rem;
 }
-/* Buttons */
-.btn {
-    display: inline-block;
-    padding: 0.55rem 1.1rem;
-    border-radius: 6px;
-    border: none;
-    font-size: 0.88rem;
-    font-weight: 600;
-    cursor: pointer;
-    text-decoration: none;
-    transition: opacity 0.15s;
-}
-.btn:hover { opacity: 0.85; text-decoration: none; }
-.btn-primary { background: #3b82f6; color: #fff; }
-.btn-secondary { background: #2f2f2f; color: #ccc; border: 1px solid #3a3a3a; }
-.btn-danger  { background: #ef4444; color: #fff; }
-.btn-warning { background: #f59e0b; color: #111; }
-.btn-success { background: #22c55e; color: #111; }
-.btn-sm { padding: 0.3rem 0.7rem; font-size: 0.78rem; }
-/* Forms */
-.form-group { margin-bottom: 1.2rem; }
-.form-group label { display: block; font-size: 0.85rem; color: #aaa; margin-bottom: 0.35rem; }
-.form-control {
-    width: 100%;
-    background: #111;
-    border: 1px solid #333;
-    border-radius: 6px;
-    color: #f0f0f0;
-    padding: 0.5rem 0.75rem;
-    font-size: 0.9rem;
-}
-.form-control:focus { outline: none; border-color: #3b82f6; }
-select.form-control { cursor: pointer; }
-/* Tables */
-.table-wrap { overflow-x: auto; }
-table { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
-th { text-align: left; padding: 0.6rem 0.9rem; color: #888; font-weight: 600;
-     border-bottom: 1px solid #2a2a2a; white-space: nowrap; }
-td { padding: 0.55rem 0.9rem; border-bottom: 1px solid #1e1e1e; vertical-align: middle; }
-tr:last-child td { border-bottom: none; }
 tr:hover td { background: #1e1e1e; }
-/* Status badges */
-.badge {
-    display: inline-block;
-    padding: 0.2rem 0.55rem;
-    border-radius: 99px;
-    font-size: 0.75rem;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.03em;
-}
-.badge-setup       { background: #1f2937; color: #9ca3af; }
-.badge-registration{ background: #1e3a5f; color: #60a5fa; }
-.badge-qualifying  { background: #1a3a26; color: #4ade80; }
-.badge-bracket     { background: #3b1a5f; color: #c084fc; }
-.badge-sub_events  { background: #3a2a10; color: #fcd34d; }
-.badge-complete    { background: #1a3a1a; color: #86efac; }
-.badge-reserve     { background: #292929; color: #a78bfa; }
-.badge-pending     { background: #292929; color: #9ca3af; }
-.badge-active      { background: #1a3a26; color: #4ade80; }
-/* Robot image thumbnails */
 .robot-thumb { width: 40px; height: 40px; object-fit: cover; border-radius: 4px; }
-/* Empty state */
-.empty { color: #555; font-size: 0.9rem; padding: 1.5rem 0; text-align: center; }
 /* Inline form (for small action buttons inside table rows) */
 .inline-form { display: inline; }
-/* Alert / flash messages */
-.alert {
-    padding: 0.75rem 1rem;
-    border-radius: 6px;
-    margin-bottom: 1.2rem;
-    font-size: 0.9rem;
-}
-.alert-error   { background: #3b1010; border: 1px solid #ef4444; color: #fca5a5; }
-.alert-success { background: #0f2f1a; border: 1px solid #22c55e; color: #86efac; }
-.alert-info    { background: #1e2f4a; border: 1px solid #3b82f6; color: #93c5fd; }
 /* Preview table specifics */
 .preview-status-new { color: #4ade80; font-size: 0.8rem; }
 .preview-status-dup { color: #f59e0b; font-size: 0.8rem; }
-/* Spinner */
-.htmx-indicator { display: none; }
-.htmx-request .htmx-indicator { display: inline; }
 """
 
 # ---------------------------------------------------------------------------
@@ -278,7 +183,7 @@ _TRANSITION_LABELS: dict[EventStatus, str] = {
 
 
 def _status_badge(status: EventStatus) -> Span:
-    return Span(status.value, cls=f"badge badge-{status.value}")
+    return status_badge(status)
 
 
 def _topbar(user: User) -> Header:
@@ -294,19 +199,11 @@ def _topbar(user: User) -> Header:
 
 
 def _page(title: str, *body_content, user: Optional[User] = None) -> HTMLResponse:
-    htmx = Script(src="https://unpkg.com/htmx.org@1.9.12")
-    head = Head(
-        Meta(charset="utf-8"),
-        Meta(name="viewport", content="width=device-width, initial-scale=1"),
-        Title(f"{title} — BitBT"),
-        Style(_CSS),
-        htmx,
-    )
     body_children = []
     if user:
         body_children.append(_topbar(user))
     body_children.append(Div(*body_content, cls="content"))
-    return HTMLResponse(to_xml(Html(head, Body(*body_children))))
+    return page_response(title, *body_children, css=_CSS, script_srcs=(HTMX_SCRIPT_URL,))
 
 
 # ---------------------------------------------------------------------------
