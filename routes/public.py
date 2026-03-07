@@ -69,6 +69,7 @@ from models import (
     SubEventMatchup,
     SubEventTeam,
 )
+from scoring import BYE_POINTS
 
 router = APIRouter(prefix="/events")
 
@@ -252,6 +253,28 @@ def _status_badge(status: EventStatus) -> Span:
 
 def _get_public_event(event_id: int, db: Session) -> Optional[Event]:
     return db.query(Event).filter(Event.id == event_id).first()
+
+
+def _robot_has_event_history(robot_id: int, event_id: int, db: Session) -> bool:
+    """Return True if the robot is currently registered or has fought in the event."""
+    active_or_reserve = (
+        db.query(EventRobot.id)
+        .filter(EventRobot.event_id == event_id, EventRobot.robot_id == robot_id)
+        .first()
+    )
+    if active_or_reserve:
+        return True
+
+    prior_match = (
+        db.query(Matchup.id)
+        .join(Phase, Phase.id == Matchup.phase_id)
+        .filter(
+            Phase.event_id == event_id,
+            or_(Matchup.robot1_id == robot_id, Matchup.robot2_id == robot_id),
+        )
+        .first()
+    )
+    return prior_match is not None
 
 
 def _robot_points_in_event(robot_id: int, event_id: int, db: Session) -> int:
@@ -471,13 +494,7 @@ def robot_fights(
     if not robot:
         return _not_found()
 
-    # Confirm this robot is in this event
-    er = (
-        db.query(EventRobot)
-        .filter(EventRobot.event_id == event_id, EventRobot.robot_id == robot_id)
-        .first()
-    )
-    if not er:
+    if not _robot_has_event_history(robot_id, event_id, db):
         return _not_found()
 
     # All matchups for this robot in this event, ordered by phase/display_order
@@ -488,7 +505,7 @@ def robot_fights(
             Phase.event_id == event_id,
             or_(Matchup.robot1_id == robot_id, Matchup.robot2_id == robot_id),
         )
-        .order_by(Phase.phase_number, Matchup.display_order)
+        .order_by(Phase.phase_number, Matchup.bracket_round, Matchup.display_order)
         .all()
     )
 
@@ -508,7 +525,7 @@ def robot_fights(
         is_bye = m.robot2_id is None
         if is_bye:
             opponent_cell = Span("BYE", style="color:#555;font-style:italic;")
-            result_label, result_pts, opp_pts = "BYE (5 pts)", "5", "—"
+            result_label, result_pts, opp_pts = f"BYE ({BYE_POINTS} pts)", str(BYE_POINTS), "—"
             row_cls = "fight-row-win"
         else:
             opponent = m.robot2 if m.robot1_id == robot_id else m.robot1
@@ -540,7 +557,7 @@ def robot_fights(
 
         pts_display = (
             Span(result_pts, style="color:#4ade80;font-weight:600;")
-            if result_label in ("Win", "BYE (5 pts)")
+            if result_label in ("Win", f"BYE ({BYE_POINTS} pts)")
             else Span(result_pts, style="color:#f87171;" if result_label == "Loss" else "color:#888;")
         )
 
@@ -746,7 +763,7 @@ def bracket_view(event_id: int, db: Session = Depends(get_db)):
     matchups = (
         db.query(Matchup)
         .filter(Matchup.phase_id == bracket_phase.id)
-        .order_by(Matchup.display_order)
+        .order_by(Matchup.bracket_round, Matchup.display_order)
         .all()
     )
 
@@ -761,36 +778,17 @@ def bracket_view(event_id: int, db: Session = Depends(get_db)):
             ),
         )
 
-    # Group matchups into rounds by powers of 2
-    # For N robots in bracket: round with ceil(N/2^k) matchups
-    total = len(matchups)
-    round_sizes = []
-    n = total
-    while n > 0:
-        half = (n + 1) // 2
-        round_sizes.append(half)
-        n -= half
-        if n <= 0:
-            break
-        n = half
+    rounds: dict[int, list[Matchup]] = {}
+    for matchup in matchups:
+        round_number = matchup.bracket_round or 1
+        rounds.setdefault(round_number, []).append(matchup)
 
-    # Re-derive: R1=ceil(total/1 down to 1), each round halves
-    # Simpler approach: infer from position
-    rounds: list[list[Matchup]] = []
-    idx = 0
-    size = _next_pow2_half(total)
-    while idx < total:
-        chunk = matchups[idx: idx + size]
-        rounds.append(list(chunk))
-        idx += size
-        size = max(1, size // 2)
-
-    round_labels = _bracket_round_labels(len(rounds))
+    total_rounds = _total_bracket_rounds(rounds)
 
     sections = []
-    for rnd_idx, (label, rnd_matchups) in enumerate(zip(round_labels, rounds)):
-        sections.append(P(label, cls="round-header"))
-        for m in rnd_matchups:
+    for round_number in sorted(rounds.keys()):
+        sections.append(P(_public_bracket_round_label(round_number, total_rounds), cls="round-header"))
+        for m in rounds[round_number]:
             sections.append(_bracket_matchup_card(m, event_id))
 
     return _page(
@@ -804,35 +802,29 @@ def bracket_view(event_id: int, db: Session = Depends(get_db)):
     )
 
 
-def _next_pow2_half(n: int) -> int:
-    """Return the size of round 1 when N total matchups exist in the bracket.
-
-    For a 16-robot bracket: 8 R1 + 4 QF + 2 SF + 1 F = 15 matchups.
-    Round 1 size = largest power-of-2 that is ≤ n and rounds fit cleanly.
-    Fallback: just use ceil(n / 2) so any bracket fits.
-    """
-    if n <= 1:
+def _total_bracket_rounds(rounds: dict[int, list[Matchup]]) -> int:
+    """Infer the intended bracket depth from the largest round size."""
+    if not rounds:
         return 1
-    # Find the round 1 size: start from the largest and work down
-    size = 1
-    while size * 2 <= n:
-        size *= 2
-    # size is now the largest power of 2 ≤ n
-    # If n itself is a power of 2, round 1 = n/2
-    if n == size:
-        return size // 2
-    # Otherwise size > n/2: the first round has n - (size - 1) matches... use simpler heuristic
-    return (n + 1) // 2
+
+    round_one_size = max(len(matchups) for matchups in rounds.values())
+    total_rounds = 1
+    while round_one_size > 1:
+        round_one_size //= 2
+        total_rounds += 1
+    return total_rounds
 
 
-def _bracket_round_labels(num_rounds: int) -> list[str]:
-    """Generate round labels from Final backwards."""
-    terminal = ["Final", "Semi-finals", "Quarter-finals", "Round of 16", "Round of 32", "Round of 64"]
-    if num_rounds <= len(terminal):
-        labels = terminal[:num_rounds]
-        labels.reverse()
-        return labels
-    return [f"Round {i + 1}" for i in range(num_rounds)]
+def _public_bracket_round_label(round_number: int, total_rounds: int) -> str:
+    """Label bracket rounds consistently even before later rounds are generated."""
+    labels = {
+        1: "Round of 16",
+        2: "Quarter-finals",
+        3: "Semi-finals",
+        4: "Final",
+    }
+    offset = max(0, 4 - total_rounds)
+    return labels.get(round_number + offset, f"Round {round_number}")
 
 
 def _bracket_matchup_card(m: Matchup, event_id: int) -> Div:
