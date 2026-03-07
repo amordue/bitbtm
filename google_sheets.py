@@ -14,7 +14,7 @@ _COL_CONTACT_EMAIL = "contact email"
 _COL_IMAGE_URL = "image url"
 
 
-def _extract_sheet_id(sheet_url: str) -> str:
+def extract_sheet_id(sheet_url: str) -> str:
     """Extract the Google Sheets spreadsheet ID from its URL."""
     match = re.search(r"/spreadsheets/d/([a-zA-Z0-9_-]+)", sheet_url)
     if not match:
@@ -34,7 +34,7 @@ def fetch_sheet_rows(sheet_url: str, access_token: str) -> list[dict]:
     The first row is treated as column headers.  Columns not in the expected set
     are preserved as-is under their original header name.
     """
-    sheet_id = _extract_sheet_id(sheet_url)
+    sheet_id = extract_sheet_id(sheet_url)
     service = _build_service(access_token)
     result = (
         service.spreadsheets()

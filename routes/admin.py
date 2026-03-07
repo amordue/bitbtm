@@ -52,7 +52,12 @@ from sqlalchemy.orm import Session
 from auth import get_valid_access_token, require_organizer
 from config import UPLOAD_DIR
 from database import get_db
-from google_sheets import fetch_sheet_rows, parse_robot_registrations
+from event_imports import (
+    import_selected_event_registrations,
+    load_registrations,
+    refresh_event_registrations,
+)
+from google_sheets import fetch_sheet_rows
 from matching import (
     advance_bracket_round,
     advance_sub_event_bracket,
@@ -943,13 +948,7 @@ def import_preview(
             P("Sheet is empty or has no data rows.", cls="alert alert-info"),
         )))
 
-    from google_sheets import _extract_sheet_id
-    try:
-        sheet_id = _extract_sheet_id(sheet_url)
-    except ValueError:
-        sheet_id = sheet_url
-
-    registrations = parse_robot_registrations(rows, sheet_id)
+    _, registrations = load_registrations(rows, sheet_url)
 
     if not registrations:
         return HTMLResponse(to_xml(Div(
@@ -1069,81 +1068,15 @@ def do_import(
             f"/admin/events/{event_id}/import?error={str(exc)[:80]}", status_code=303
         )
 
-    from google_sheets import _extract_sheet_id
-    try:
-        sheet_id = _extract_sheet_id(sheet_url)
-    except ValueError:
-        sheet_id = sheet_url
-
-    registrations = parse_robot_registrations(rows, sheet_id)
-    selected = {r["sheet_row_id"]: r for r in registrations if r["sheet_row_id"] in row_ids}
-
-    max_res = (
-        db.query(EventRobot.reserve_order)
-        .filter(EventRobot.event_id == event_id, EventRobot.is_reserve == True)
-        .order_by(EventRobot.reserve_order.desc().nullslast())
-        .first()
+    _, registrations = load_registrations(rows, sheet_url)
+    import_selected_event_registrations(
+        event_id,
+        registrations,
+        row_ids,
+        reserve_ids,
+        db,
+        import_image=_try_import_image,
     )
-    next_reserve_order = (max_res[0] or 0) + 1 if max_res else 1
-
-    for row_id in row_ids:
-        reg = selected.get(row_id)
-        if not reg:
-            continue
-
-        is_res = row_id in reserve_ids
-
-        # Upsert Roboteer
-        roboteer = (
-            db.query(Roboteer)
-            .filter(Roboteer.roboteer_name == reg["roboteer_name"])
-            .first()
-        )
-        if not roboteer:
-            roboteer = Roboteer(
-                roboteer_name=reg["roboteer_name"],
-                contact_email=reg.get("contact_email"),
-                imported_from_sheet_id=sheet_id,
-            )
-            db.add(roboteer)
-            db.flush()
-
-        # Upsert Robot (by sheet_row_id to prevent duplicates)
-        robot = (
-            db.query(Robot)
-            .filter(Robot.sheet_row_id == row_id)
-            .first()
-        )
-        if not robot:
-            robot = Robot(
-                robot_name=reg["robot_name"],
-                roboteer_id=roboteer.id,
-                weapon_type=reg.get("weapon_type"),
-                sheet_row_id=row_id,
-                image_source=ImageSource.none,
-            )
-            db.add(robot)
-            db.flush()
-
-            if reg.get("image_url"):
-                _try_import_image(robot, reg["image_url"])
-
-        # Add to event roster if not already present
-        existing_er = (
-            db.query(EventRobot)
-            .filter(EventRobot.event_id == event_id, EventRobot.robot_id == robot.id)
-            .first()
-        )
-        if not existing_er:
-            res_order = next_reserve_order if is_res else None
-            if is_res:
-                next_reserve_order += 1
-            db.add(EventRobot(
-                event_id=event_id,
-                robot_id=robot.id,
-                is_reserve=is_res,
-                reserve_order=res_order,
-            ))
 
     db.commit()
     return RedirectResponse(f"/admin/events/{event_id}?msg=imported", status_code=303)
@@ -1179,64 +1112,13 @@ def refresh_sheet(
             status_code=303,
         )
 
-    from google_sheets import _extract_sheet_id
-    try:
-        sheet_id = _extract_sheet_id(ev.google_sheet_url)
-    except ValueError:
-        sheet_id = ev.google_sheet_url
-
-    registrations = parse_robot_registrations(rows, sheet_id)
-
-    existing_row_ids = {
-        r.sheet_row_id
-        for r in db.query(Robot).all()
-        if r.sheet_row_id
-    }
-    event_robot_ids = {
-        er.robot_id for er in db.query(EventRobot).filter(EventRobot.event_id == event_id).all()
-    }
-    max_res = (
-        db.query(EventRobot.reserve_order)
-        .filter(EventRobot.event_id == event_id, EventRobot.is_reserve == True)
-        .order_by(EventRobot.reserve_order.desc().nullslast())
-        .first()
+    _, registrations = load_registrations(rows, ev.google_sheet_url)
+    refresh_event_registrations(
+        event_id,
+        registrations,
+        db,
+        import_image=_try_import_image,
     )
-    next_reserve_order = (max_res[0] or 0) + 1 if max_res else 1
-
-    for reg in registrations:
-        row_id = reg["sheet_row_id"]
-        if row_id in existing_row_ids:
-            robot = db.query(Robot).filter(Robot.sheet_row_id == row_id).first()
-            if robot and robot.id not in event_robot_ids:
-                db.add(EventRobot(event_id=event_id, robot_id=robot.id, is_reserve=False))
-            continue
-
-        roboteer = (
-            db.query(Roboteer).filter(Roboteer.roboteer_name == reg["roboteer_name"]).first()
-        )
-        if not roboteer:
-            roboteer = Roboteer(
-                roboteer_name=reg["roboteer_name"],
-                contact_email=reg.get("contact_email"),
-                imported_from_sheet_id=sheet_id,
-            )
-            db.add(roboteer)
-            db.flush()
-
-        robot = Robot(
-            robot_name=reg["robot_name"],
-            roboteer_id=roboteer.id,
-            weapon_type=reg.get("weapon_type"),
-            sheet_row_id=row_id,
-            image_source=ImageSource.none,
-        )
-        db.add(robot)
-        db.flush()
-
-        if reg.get("image_url"):
-            _try_import_image(robot, reg["image_url"])
-
-        db.add(EventRobot(event_id=event_id, robot_id=robot.id, is_reserve=False))
 
     db.commit()
     return RedirectResponse(f"/admin/events/{event_id}?msg=refreshed", status_code=303)
