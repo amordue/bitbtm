@@ -1,0 +1,95 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 900" width="1200" height="900" role="img" aria-label="Blueprint illustration of a cluster combat robot system">
+  <defs>
+    <linearGradient id="bg-gradient" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0b2340"/>
+      <stop offset="55%" stop-color="#0f3458"/>
+      <stop offset="100%" stop-color="#08182d"/>
+    </linearGradient>
+    <radialGradient id="vignette" cx="50%" cy="45%" r="70%">
+      <stop offset="55%" stop-color="#000000" stop-opacity="0"/>
+      <stop offset="100%" stop-color="#01070f" stop-opacity="0.46"/>
+    </radialGradient>
+    <pattern id="grid-major" width="120" height="120" patternUnits="userSpaceOnUse">
+      <path d="M120 0H0V120" fill="none" stroke="#8fe7ff" stroke-opacity="0.14" stroke-width="1"/>
+    </pattern>
+    <pattern id="grid-minor" width="24" height="24" patternUnits="userSpaceOnUse">
+      <path d="M24 0H0V24" fill="none" stroke="#8fe7ff" stroke-opacity="0.06" stroke-width="1"/>
+    </pattern>
+    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="3.5" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    <linearGradient id="body-fill" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#133b63" stop-opacity="0.92"/>
+      <stop offset="100%" stop-color="#0d2744" stop-opacity="0.72"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="1200" height="900" fill="url(#bg-gradient)"/>
+  <rect width="1200" height="900" fill="url(#grid-minor)"/>
+  <rect width="1200" height="900" fill="url(#grid-major)"/>
+
+  <g stroke="#b6f4ff" stroke-linecap="round" stroke-linejoin="round" fill="none">
+    <g opacity="0.48">
+      <path d="M104 690H1096" stroke-width="2" stroke-dasharray="10 14"/>
+      <path d="M246 120V786" stroke-width="1.6" stroke-dasharray="7 15"/>
+      <path d="M852 112V780" stroke-width="1.6" stroke-dasharray="7 15"/>
+      <circle cx="282" cy="252" r="90" stroke-width="1.2" stroke-dasharray="7 11"/>
+      <circle cx="936" cy="244" r="118" stroke-width="1.4" stroke-dasharray="8 12"/>
+      <circle cx="936" cy="244" r="72" stroke-width="1.1" stroke-dasharray="6 10"/>
+      <path d="M130 618C260 530 394 478 550 458" stroke-width="1.4" stroke-dasharray="7 12"/>
+      <path d="M744 548C874 510 986 448 1084 352" stroke-width="1.4" stroke-dasharray="7 12"/>
+    </g>
+    <g opacity="0.32">
+      <path d="M126 212H314" stroke-width="1.2"/>
+      <path d="M910 700H1080" stroke-width="1.2"/>
+      <path d="M1038 330V514" stroke-width="1.2"/>
+      <circle cx="1038" cy="330" r="5" fill="#b6f4ff" stroke="none"/>
+      <circle cx="166" cy="618" r="5" fill="#b6f4ff" stroke="none"/>
+      <path d="M166 618V746" stroke-width="1.2"/>
+    </g>
+  </g>
+
+  <g filter="url(#glow)" stroke="#d0fbff" stroke-linecap="round" stroke-linejoin="round">
+    <g transform="translate(138 150)">
+      <g transform="translate(178 362) rotate(-14)">
+        <path d="M-112 22L-48 -30L66 -48L126 -10L126 10L66 48L-48 30Z" fill="url(#body-fill)" stroke-width="4"/>
+        <path d="M-88 14L-34 -20L54 -34L98 -10L98 10L54 34L-34 20Z" fill="none" stroke="#9fefff" stroke-width="2.4" opacity="0.88"/>
+        <path d="M-112 0H126" stroke="#c3f8ff" stroke-width="1.6" stroke-dasharray="6 10" opacity="0.72"/>
+        <circle cx="6" cy="40" r="24" fill="#0f2b45" stroke-width="4"/>
+        <circle cx="6" cy="40" r="10" fill="none" stroke="#8fe7ff" stroke-width="2"/>
+        <circle cx="78" cy="40" r="24" fill="#0f2b45" stroke-width="4"/>
+        <circle cx="78" cy="40" r="10" fill="none" stroke="#8fe7ff" stroke-width="2"/>
+      </g>
+
+      <g transform="translate(458 300) rotate(6)">
+        <path d="M-126 26L-52 -34L84 -56L152 -12L152 12L84 56L-52 34Z" fill="url(#body-fill)" stroke-width="4"/>
+        <path d="M-98 16L-38 -22L70 -40L120 -12L120 12L70 40L-38 22Z" fill="none" stroke="#9fefff" stroke-width="2.4" opacity="0.88"/>
+        <path d="M-126 0H152" stroke="#c3f8ff" stroke-width="1.6" stroke-dasharray="6 10" opacity="0.72"/>
+        <circle cx="12" cy="44" r="26" fill="#0f2b45" stroke-width="4"/>
+        <circle cx="12" cy="44" r="11" fill="none" stroke="#8fe7ff" stroke-width="2"/>
+        <circle cx="100" cy="44" r="26" fill="#0f2b45" stroke-width="4"/>
+        <circle cx="100" cy="44" r="11" fill="none" stroke="#8fe7ff" stroke-width="2"/>
+      </g>
+
+      <g transform="translate(750 410) rotate(14)">
+        <path d="M-110 22L-46 -30L64 -48L124 -10L124 10L64 48L-46 30Z" fill="url(#body-fill)" stroke-width="4"/>
+        <path d="M-86 14L-32 -20L52 -34L96 -10L96 10L52 34L-32 20Z" fill="none" stroke="#9fefff" stroke-width="2.4" opacity="0.88"/>
+        <path d="M-110 0H124" stroke="#c3f8ff" stroke-width="1.6" stroke-dasharray="6 10" opacity="0.72"/>
+        <circle cx="4" cy="40" r="24" fill="#0f2b45" stroke-width="4"/>
+        <circle cx="4" cy="40" r="10" fill="none" stroke="#8fe7ff" stroke-width="2"/>
+        <circle cx="76" cy="40" r="24" fill="#0f2b45" stroke-width="4"/>
+        <circle cx="76" cy="40" r="10" fill="none" stroke="#8fe7ff" stroke-width="2"/>
+      </g>
+
+      <path d="M272 360C360 308 438 286 530 286" fill="none" stroke="#8fe7ff" stroke-width="1.8" opacity="0.44" stroke-dasharray="8 10"/>
+      <path d="M586 324C662 338 724 368 778 416" fill="none" stroke="#8fe7ff" stroke-width="1.8" opacity="0.44" stroke-dasharray="8 10"/>
+      <path d="M266 430C406 520 612 540 760 470" fill="none" stroke="#b6f4ff" stroke-width="2.2" opacity="0.54"/>
+    </g>
+  </g>
+
+  <rect width="1200" height="900" fill="url(#vignette)"/>
+</svg>

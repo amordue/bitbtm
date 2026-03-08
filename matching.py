@@ -110,6 +110,21 @@ def create_qualifying_round(event_id: int, round_number: int, db: Session) -> Ph
     Create a new qualifying round Phase with random matchups and RunOrder entries.
     The phase is set to `active` immediately.
     """
+    return create_qualifying_round_with_status(
+        event_id,
+        round_number,
+        PhaseStatus.active,
+        db,
+    )
+
+
+def create_qualifying_round_with_status(
+    event_id: int,
+    round_number: int,
+    status: PhaseStatus,
+    db: Session,
+) -> Phase:
+    """Create a qualifying round with the provided phase status."""
     robot_ids = get_active_robot_ids(event_id, db)
     bye_counts = get_qualifying_bye_counts(event_id, db)
     pairs = _make_qualifying_pairs(robot_ids, bye_counts)
@@ -118,7 +133,7 @@ def create_qualifying_round(event_id: int, round_number: int, db: Session) -> Ph
         event_id=event_id,
         phase_number=round_number,
         phase_type=PhaseType.qualifying,
-        status=PhaseStatus.active,
+        status=status,
     )
     db.add(phase)
     db.flush()
@@ -144,6 +159,87 @@ def create_qualifying_round(event_id: int, round_number: int, db: Session) -> Ph
         ))
 
     return phase
+
+
+def set_incomplete_qualifying_round_state(
+    event_id: int,
+    active_round_number: int | None,
+    db: Session,
+) -> None:
+    """Keep completed qualifying phases complete and set the active/pending incomplete ones."""
+    qualifying_phases = (
+        db.query(Phase)
+        .filter(Phase.event_id == event_id, Phase.phase_type == PhaseType.qualifying)
+        .order_by(Phase.phase_number)
+        .all()
+    )
+
+    for phase in qualifying_phases:
+        if phase.status == PhaseStatus.complete:
+            continue
+        phase.status = (
+            PhaseStatus.active
+            if active_round_number is not None and phase.phase_number == active_round_number
+            else PhaseStatus.pending
+        )
+
+
+def create_qualifying_schedule(
+    event_id: int,
+    total_rounds: int,
+    db: Session,
+) -> list[Phase]:
+    """Create any missing qualifying rounds up to `total_rounds` and activate round 1."""
+    existing_rounds = {
+        phase_number
+        for (phase_number,) in (
+            db.query(Phase.phase_number)
+            .filter(Phase.event_id == event_id, Phase.phase_type == PhaseType.qualifying)
+            .all()
+        )
+    }
+
+    created: list[Phase] = []
+    for round_number in range(1, total_rounds + 1):
+        if round_number in existing_rounds:
+            continue
+        created.append(
+            create_qualifying_round_with_status(
+                event_id,
+                round_number,
+                PhaseStatus.active if round_number == 1 else PhaseStatus.pending,
+                db,
+            )
+        )
+
+    set_incomplete_qualifying_round_state(event_id, 1, db)
+    return created
+
+
+def activate_next_qualifying_round(
+    event_id: int,
+    current_round_number: int,
+    db: Session,
+) -> Phase | None:
+    """Activate the next incomplete qualifying round after `current_round_number`, if any."""
+    next_phase = (
+        db.query(Phase)
+        .filter(
+            Phase.event_id == event_id,
+            Phase.phase_type == PhaseType.qualifying,
+            Phase.phase_number > current_round_number,
+            Phase.status != PhaseStatus.complete,
+        )
+        .order_by(Phase.phase_number)
+        .first()
+    )
+
+    set_incomplete_qualifying_round_state(
+        event_id,
+        next_phase.phase_number if next_phase else None,
+        db,
+    )
+    return next_phase
 
 
 # ---------------------------------------------------------------------------

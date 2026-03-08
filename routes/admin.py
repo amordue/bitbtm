@@ -68,15 +68,18 @@ from event_imports import (
 )
 from google_sheets import fetch_sheet_rows
 from matching import (
+    activate_next_qualifying_round,
     advance_bracket_round,
     advance_sub_event_bracket,
     create_bracket,
     create_qualifying_round,
+    create_qualifying_schedule,
     create_sub_event_bracket,
     get_active_robot_ids,
     get_qualifying_bye_counts,
     get_sub_event_eligible_robots,
     qualifying_standings,
+    set_incomplete_qualifying_round_state,
 )
 from models import (
     Event,
@@ -632,7 +635,7 @@ def event_detail(
         )
     else:
         phases_table = P(
-            "No phases yet. Transition to \"Qualifying\" to generate Round 1.",
+            "No phases yet. Transition to \"Qualifying\" to generate all qualifying rounds.",
             cls="empty",
         )
 
@@ -1117,9 +1120,9 @@ def transition_phase(
     ev.status = next_status
     db.add(ev)
 
-    # Auto-generate Round 1 when entering qualifying
+    # Pre-generate all three qualifying rounds so the schedule is visible up front.
     if next_status == EventStatus.qualifying:
-        create_qualifying_round(event_id, 1, db)
+        create_qualifying_schedule(event_id, 3, db)
 
     db.commit()
     return RedirectResponse(f"/admin/events/{event_id}?msg=transitioned", status_code=303)
@@ -2066,6 +2069,8 @@ def complete_bye(
     phase: Phase = m.phase
     if all(mx.status == MatchupStatus.completed for mx in phase.matchups):
         phase.status = PhaseStatus.complete
+        if phase.phase_type == PhaseType.qualifying:
+            activate_next_qualifying_round(event_id, phase.phase_number, db)
 
     db.commit()
     back = (
@@ -2097,6 +2102,8 @@ def complete_phase(
         )
 
     phase.status = PhaseStatus.complete
+    if phase.phase_type == PhaseType.qualifying:
+        activate_next_qualifying_round(event_id, phase.phase_number, db)
     db.commit()
     return RedirectResponse(
         f"/admin/events/{event_id}/phases/{phase_id}?msg=round_complete", status_code=303
@@ -2238,6 +2245,8 @@ def submit_score(
     phase: Phase = m.phase
     if all(mx.status == MatchupStatus.completed for mx in phase.matchups):
         phase.status = PhaseStatus.complete
+        if phase.phase_type == PhaseType.qualifying:
+            activate_next_qualifying_round(event_id, phase.phase_number, db)
 
     db.commit()
 
@@ -2269,6 +2278,8 @@ def clear_score(
     phase: Phase = m.phase
     if phase.status == PhaseStatus.complete:
         phase.status = PhaseStatus.active
+    if phase.phase_type == PhaseType.qualifying:
+        set_incomplete_qualifying_round_state(event_id, phase.phase_number, db)
 
     db.commit()
 

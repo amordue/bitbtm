@@ -276,54 +276,147 @@ h3 { font-size: 0.95rem; font-weight: 600; margin-bottom: 0.5rem; }
     text-align: center;
     font-size: 0.9rem;
 }
+.live-page-shell { max-width: min(96vw, 1600px); }
+.live-panel-shell { min-width: 0; }
 .live-grid {
     display: grid;
-    grid-template-columns: minmax(0, 1.4fr) minmax(320px, 1fr);
-    gap: 1rem;
+    grid-template-columns: minmax(0, 1.75fr) minmax(340px, 0.95fr);
+    gap: 1.25rem;
+    align-items: stretch;
 }
 .live-stage {
     background:
-        radial-gradient(circle at top left, rgba(96, 165, 250, 0.18), transparent 32%),
-        linear-gradient(180deg, #171717 0%, #101010 100%);
+        radial-gradient(circle at top left, rgba(96, 165, 250, 0.2), transparent 32%),
+        radial-gradient(circle at top right, rgba(248, 250, 252, 0.06), transparent 28%),
+        linear-gradient(180deg, #171717 0%, #0b0f15 100%);
     border: 1px solid #2a2a2a;
-    border-radius: 14px;
-    padding: 1.3rem;
+    border-radius: 22px;
+    padding: clamp(1.35rem, 2vw, 2.25rem);
+    min-height: clamp(480px, 68vh, 860px);
+    display: flex;
+    flex-direction: column;
 }
 .live-kicker {
-    font-size: 0.76rem;
+    font-size: 0.78rem;
     letter-spacing: 0.14em;
     text-transform: uppercase;
     color: #60a5fa;
-    margin-bottom: 0.85rem;
+    margin-bottom: 0.7rem;
 }
 .live-fight-title {
-    font-size: clamp(1.7rem, 4vw, 3.2rem);
+    font-size: clamp(2.2rem, 4.6vw, 4.8rem);
     line-height: 1.05;
     font-weight: 800;
-    margin-bottom: 0.8rem;
+    margin-bottom: 0.7rem;
 }
-.live-fight-subtitle { color: #9ca3af; margin-bottom: 1rem; }
+.live-fight-subtitle {
+    color: #9ca3af;
+    margin-bottom: 0;
+    max-width: 58rem;
+    font-size: clamp(0.98rem, 1.3vw, 1.15rem);
+}
 .live-robots {
     display: grid;
-    grid-template-columns: 1fr auto 1fr;
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
     gap: 1rem;
+    align-items: stretch;
+    flex: 1;
+    margin-top: 1.5rem;
+}
+.live-robot-link {
+    display: block;
+    min-width: 0;
+    color: inherit;
+    text-decoration: none;
+}
+.live-robot-card {
+    position: relative;
+    min-height: clamp(290px, 44vh, 560px);
+    overflow: hidden;
+    border: 1px solid #2f343d;
+    border-radius: 22px;
+    background:
+        radial-gradient(circle at top, rgba(96, 165, 250, 0.12), transparent 42%),
+        linear-gradient(180deg, #1b2230 0%, #111827 100%);
+    box-shadow: 0 26px 60px rgba(0, 0, 0, 0.22);
+}
+.live-robot-link:hover .live-robot-card {
+    border-color: rgba(96, 165, 250, 0.72);
+    box-shadow: 0 0 0 1px rgba(96, 165, 250, 0.18), 0 30px 70px rgba(0, 0, 0, 0.3);
+}
+.live-robot-photo {
+    display: block;
+    width: 100%;
+    height: 100%;
+    min-height: inherit;
+    object-fit: cover;
+    background: #0f172a;
+}
+.live-robot-photo-placeholder {
+    display: flex;
     align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 100%;
+    min-height: inherit;
+    background:
+        radial-gradient(circle at top, rgba(96, 165, 250, 0.28), transparent 34%),
+        linear-gradient(180deg, #1f2937 0%, #111827 100%);
+    color: #e5eefb;
+    font-size: clamp(3.6rem, 9vw, 7rem);
+    font-weight: 800;
+    letter-spacing: 0.04em;
 }
-.live-robot {
-    border: 1px solid #2d2d2d;
-    border-radius: 12px;
-    padding: 1rem;
-    min-height: 150px;
-    background: rgba(255, 255, 255, 0.02);
+.live-robot-overlay {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    padding: 1.1rem 1.15rem 1.2rem;
+    background: linear-gradient(180deg, rgba(5, 8, 14, 0) 0%, rgba(5, 8, 14, 0.35) 18%, rgba(5, 8, 14, 0.94) 100%);
 }
-.live-robot-name { font-size: clamp(1.35rem, 3vw, 2.4rem); font-weight: 800; }
-.live-robot-meta { color: #8d8d8d; margin-top: 0.45rem; }
+.live-robot-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    margin-bottom: 0.6rem;
+    padding: 0.28rem 0.6rem;
+    border-radius: 999px;
+    background: rgba(15, 23, 42, 0.7);
+    border: 1px solid rgba(191, 219, 254, 0.18);
+    color: #bfdbfe;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+.live-robot-name {
+    font-size: clamp(1.5rem, 3vw, 2.9rem);
+    font-weight: 800;
+    line-height: 1.02;
+}
+.live-robot-meta {
+    color: #cbd5e1;
+    margin-top: 0.45rem;
+    font-size: clamp(0.92rem, 1.2vw, 1.05rem);
+}
 .live-vs {
-    font-size: clamp(1.2rem, 2vw, 1.8rem);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    align-self: center;
+    width: clamp(74px, 8vw, 116px);
+    aspect-ratio: 1 / 1;
+    border-radius: 999px;
+    border: 1px solid rgba(96, 165, 250, 0.28);
+    background: radial-gradient(circle, rgba(96, 165, 250, 0.22) 0%, rgba(15, 23, 42, 0.92) 74%);
+    box-shadow: 0 0 0 8px rgba(10, 16, 27, 0.34);
+    font-size: clamp(1.2rem, 2vw, 1.9rem);
     font-weight: 800;
     color: #60a5fa;
     letter-spacing: 0.08em;
 }
+.live-stage-actions { margin-top: 1.2rem; }
 .queue-list { display: flex; flex-direction: column; gap: 0.75rem; }
 .queue-item {
     border: 1px solid #252525;
@@ -349,6 +442,7 @@ h3 { font-size: 0.95rem; font-weight: 600; margin-bottom: 0.5rem; }
 .queue-meta { color: #7b7b7b; font-size: 0.82rem; }
 .live-sidebar { display: flex; flex-direction: column; gap: 1rem; }
 .live-sidebar .card { margin-bottom: 0; }
+.live-sidebar .card h2 { margin-bottom: 1rem; }
 .leaderboard-mini-row {
     display: grid;
     grid-template-columns: 40px 1fr 66px;
@@ -369,11 +463,25 @@ h3 { font-size: 0.95rem; font-weight: 600; margin-bottom: 0.5rem; }
     margin-bottom: 1.1rem;
     flex-wrap: wrap;
 }
-@media (max-width: 820px) {
+@media (max-width: 1080px) {
     .live-grid { grid-template-columns: 1fr; }
     .live-robots { grid-template-columns: 1fr; }
-    .live-vs { text-align: center; }
+    .live-stage { min-height: 0; }
+    .live-vs {
+        width: auto;
+        aspect-ratio: auto;
+        padding: 0.55rem 1rem;
+    }
+}
+@media (max-width: 820px) {
     .board-header { align-items: start; }
+    .live-page-shell { max-width: 100%; }
+    .live-stage {
+        border-radius: 16px;
+        padding: 1.1rem;
+    }
+    .live-robots { margin-top: 1.1rem; }
+    .live-robot-card { min-height: 240px; }
 }
 @media (min-width: 900px) {
     .robot-detail-hero {
@@ -452,6 +560,15 @@ def _robot_page(title: str, *body_content) -> HTMLResponse:
     return page_response(
         title,
         Div(*body_content, Script(_ROBOT_DETAIL_SCRIPT), cls="content robot-page-shell"),
+        css=_CSS,
+        script_srcs=(HTMX_SCRIPT_URL,),
+    )
+
+
+def _live_page(title: str, *body_content) -> HTMLResponse:
+    return page_response(
+        title,
+        Div(*body_content, cls="content live-page-shell"),
         css=_CSS,
         script_srcs=(HTMX_SCRIPT_URL,),
     )
@@ -872,6 +989,73 @@ def _render_live_panel(ev: Event, db: Session) -> Div:
     current_item = pending_items[0] if pending_items else None
     leaderboard_rows = _leaderboard_rows(ev.id, db)[:8]
 
+    def _live_robot_card(
+        robot: Robot | None,
+        href: str | None,
+        name: str,
+        badge: str,
+        fallback_meta: str,
+    ):
+        meta_parts = []
+        if robot and robot.roboteer:
+            meta_parts.append(robot.roboteer.roboteer_name)
+        if robot and robot.weapon_type:
+            meta_parts.append(robot.weapon_type)
+        meta_text = " · ".join(meta_parts) if meta_parts else fallback_meta
+
+        if robot and robot.image_url:
+            media = Img(src=robot.image_url, cls="live-robot-photo", alt=robot.robot_name)
+        else:
+            initial = (name[:1] if name else "?").upper()
+            media = Div(initial, cls="live-robot-photo-placeholder")
+
+        card = Div(
+            media,
+            Div(
+                Div(badge, cls="live-robot-badge"),
+                Div(name, cls="live-robot-name"),
+                Div(meta_text, cls="live-robot-meta"),
+                cls="live-robot-overlay",
+            ),
+            cls="live-robot-card",
+        )
+        if href:
+            return A(card, href=href, cls="live-robot-link")
+        return card
+
+    left_name = "TBD"
+    right_name = "BYE"
+    if current_item:
+        if current_item.get("robot1_name"):
+            left_name = current_item["robot1_name"]
+            right_name = current_item.get("robot2_name") or "BYE"
+        elif " vs " in current_item["title"]:
+            left_name, right_name = current_item["title"].split(" vs ", 1)
+        else:
+            left_name = current_item["title"]
+
+    live_matchup = (
+        [
+            _live_robot_card(
+                current_item.get("robot1") if current_item else None,
+                current_item.get("robot1_href") if current_item else None,
+                left_name,
+                "Red Corner",
+                current_item["meta"] if current_item else "Awaiting next matchup",
+            ),
+            Div("VS", cls="live-vs"),
+            _live_robot_card(
+                current_item.get("robot2") if current_item else None,
+                current_item.get("robot2_href") if current_item else None,
+                right_name,
+                "Blue Corner" if current_item and current_item.get("robot2_name") else "Automatic Advance",
+                current_item["type_label"] if current_item else "No pending fights",
+            ),
+        ]
+        if current_item
+        else [Div(P("The run order is empty right now.", cls="empty"), cls="card")]
+    )
+
     current_stage = Div(
         Div("Now Fighting", cls="live-kicker"),
         H2(current_item["title"], cls="live-fight-title") if current_item else H2("Awaiting next fight", cls="live-fight-title"),
@@ -880,26 +1064,13 @@ def _render_live_panel(ev: Event, db: Session) -> Div:
             cls="live-fight-subtitle",
         ),
         Div(
-            *(
-                [
-                    Div(
-                        Div(current_item["title"].split(" vs ")[0], cls="live-robot-name"),
-                        Div(current_item["meta"], cls="live-robot-meta"),
-                        cls="live-robot",
-                    ),
-                    Div("VS", cls="live-vs"),
-                    Div(
-                        Div(current_item["title"].split(" vs ")[1] if " vs " in current_item["title"] else "BYE", cls="live-robot-name"),
-                        Div(current_item["type_label"], cls="live-robot-meta"),
-                        cls="live-robot",
-                    ),
-                ]
-                if current_item and " vs " in current_item["title"]
-                else [Div(P("The run order is empty right now.", cls="empty"), cls="card")]
-            ),
+            *live_matchup,
             cls="live-robots",
         ),
-        A("Open next-up board", href=f"/events/{ev.id}/next-up", cls="btn btn-secondary", style="margin-top:1rem;display:inline-block;"),
+        Div(
+            A("Open next-up board", href=f"/events/{ev.id}/next-up", cls="btn btn-secondary"),
+            cls="live-stage-actions",
+        ),
         cls="live-stage",
     )
 
@@ -930,6 +1101,10 @@ def _render_live_panel(ev: Event, db: Session) -> Div:
     else:
         leaderboard_items.append(P("Leaderboard will populate once results are entered.", cls="empty"))
 
+    panel_attrs = _auto_refresh_attrs(f"/events/{ev.id}/live/panel", interval="15s")
+    panel_attrs["id"] = "live-panel"
+    panel_attrs["cls"] = "live-panel-shell auto-panel"
+
     return Div(
         Div(
             Div(
@@ -948,8 +1123,7 @@ def _render_live_panel(ev: Event, db: Session) -> Div:
             ),
             cls="live-grid",
         ),
-        id="live-panel",
-        **_auto_refresh_attrs(f"/events/{ev.id}/live/panel", interval="15s"),
+        **panel_attrs,
     )
 
 
@@ -1425,7 +1599,7 @@ def live_display(event_id: int, db: Session = Depends(get_db)):
     ev = _get_public_event(event_id, db)
     if not ev:
         return _not_found()
-    return _page(
+    return _live_page(
         f"Live Display — {ev.event_name}",
         _event_topbar(ev, "live", db=db),
         _render_live_panel(ev, db),

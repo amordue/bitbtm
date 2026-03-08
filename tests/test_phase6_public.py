@@ -245,9 +245,12 @@ class Phase6PublicViewsTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertIn("Live Display", response.text)
+        self.assertIn('class="content live-page-shell"', response.text)
         self.assertIn("Alpha vs Gamma", response.text)
         self.assertIn("Leaderboard", response.text)
         self.assertIn(f'hx-get="/events/{self.ids["event_id"]}/live/panel"', response.text)
+        self.assertIn('class="live-robot-photo"', response.text)
+        self.assertIn('src="https://example.com/alpha.png"', response.text)
         self.assertIn("Alpha", response.text)
         self.assertTrue(
             ">7<" in response.text or "7 qualifying" in response.text,
