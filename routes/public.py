@@ -344,6 +344,8 @@ h3 { font-size: 0.95rem; font-weight: 600; margin-bottom: 0.5rem; }
     margin-bottom: 0.25rem;
 }
 .queue-title { font-weight: 700; margin-bottom: 0.2rem; }
+.queue-title-link { color: #f5f5f5; text-decoration: none; }
+.queue-title-link:hover { color: #93c5fd; text-decoration: underline; }
 .queue-meta { color: #7b7b7b; font-size: 0.82rem; }
 .live-sidebar { display: flex; flex-direction: column; gap: 1rem; }
 .live-sidebar .card { margin-bottom: 0; }
@@ -525,6 +527,23 @@ def _phase_long_label(phase: Phase, matchup: Matchup) -> str:
 
 def _pending_run_order_items(event_id: int, db: Session) -> list[dict]:
     return _load_pending_run_order_items(event_id, db, _phase_long_label)
+
+
+def _render_next_up_title(item: dict):
+    if item.get("robot1_href"):
+        if item.get("robot2_href"):
+            return Span(
+                A(item["robot1_name"], href=item["robot1_href"], cls="queue-title-link"),
+                " vs ",
+                A(item["robot2_name"], href=item["robot2_href"], cls="queue-title-link"),
+            )
+        return Span(
+            A(item["robot1_name"], href=item["robot1_href"], cls="queue-title-link"),
+            " receives a bye",
+        )
+    if item.get("href"):
+        return A(item["title"], href=item["href"], cls="queue-title-link")
+    return Span(item["title"])
 
 
 def _robot_main_history(robot_id: int, event_id: int, db: Session) -> list[dict]:
@@ -940,9 +959,8 @@ def _render_next_up_panel(ev: Event, db: Session) -> Div:
     for index, item in enumerate(pending_items[:10]):
         queue.append(Div(
             Div(f"Slot {item['slot_index'] + 1}", cls="queue-slot"),
-            Div(item["title"], cls="queue-title"),
+            Div(_render_next_up_title(item), cls="queue-title"),
             Div(f"{item['type_label']} · {item['meta']}", cls="queue-meta"),
-            A("View", href=item["href"], cls="btn btn-sm btn-secondary", style="margin-top:0.6rem;display:inline-block;"),
             cls="queue-item" + (" current" if index == 0 else ""),
         ))
 

@@ -237,6 +237,7 @@ class Phase6PublicViewsTests(unittest.TestCase):
             return {
                 "event_id": event.id,
                 "alpha_id": robots[0].id,
+                "gamma_id": robots[2].id,
             }
 
     def test_live_display_shows_current_match_and_leaderboard(self):
@@ -258,10 +259,31 @@ class Phase6PublicViewsTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertIn("Next Up Board", response.text)
-        self.assertIn("Alpha vs Gamma", response.text)
+        self.assertIn(
+            f'<a href="/events/{self.ids["event_id"]}/robot/{self.ids["alpha_id"]}" class="queue-title-link">Alpha</a>',
+            response.text,
+        )
+        self.assertIn(
+            f'<a href="/events/{self.ids["event_id"]}/robot/{self.ids["gamma_id"]}" class="queue-title-link">Gamma</a>',
+            response.text,
+        )
         self.assertIn("Skyline vs Iron Pair", response.text)
+        self.assertIn(
+            f'href="/events/{self.ids["event_id"]}/robot/{self.ids["alpha_id"]}"',
+            response.text,
+        )
+        self.assertIn(
+            f'href="/events/{self.ids["event_id"]}/robot/{self.ids["gamma_id"]}"',
+            response.text,
+        )
+        self.assertNotIn(
+            'class="btn btn-sm btn-secondary"',
+            response.text,
+        )
         self.assertLess(
-            response.text.index("Alpha vs Gamma"),
+            response.text.index(
+                f'<a href="/events/{self.ids["event_id"]}/robot/{self.ids["alpha_id"]}" class="queue-title-link">Alpha</a>'
+            ),
             response.text.index("Skyline vs Iron Pair"),
         )
 
