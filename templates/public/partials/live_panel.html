@@ -13,6 +13,25 @@
         <a href="/events/{{ event.id }}" class="btn btn-secondary">Public overview</a>
     </div>
     <div class="live-grid">
+        <div class="live-column live-column-side live-column-left">
+            <div class="card live-side-card">
+                <h2>Leaderboard</h2>
+                {% if leaderboard_rows %}
+                    {% for row in leaderboard_rows %}
+                    <div class="leaderboard-mini-row">
+                        <div class="leaderboard-mini-rank">{{ row.rank }}</div>
+                        <div>
+                            <div class="leaderboard-mini-name">{{ row.robot_name }}</div>
+                            <div class="queue-meta">{{ row.roboteer_name }}</div>
+                        </div>
+                        <div class="leaderboard-mini-points">{{ row.total_pts }}</div>
+                    </div>
+                    {% endfor %}
+                {% else %}
+                <p class="empty">Leaderboard will populate once results are entered.</p>
+                {% endif %}
+            </div>
+        </div>
         <div class="live-stage">
             <div class="live-kicker">Now Fighting</div>
             <h2 class="live-fight-title">{{ current_stage.title }}</h2>
@@ -58,8 +77,8 @@
                 <a href="/events/{{ event.id }}/next-up" class="btn btn-secondary">Open next-up board</a>
             </div>
         </div>
-        <div class="live-sidebar">
-            <div class="card">
+        <div class="live-column live-column-side live-column-right">
+            <div class="card live-side-card">
                 <h2>Up Next</h2>
                 <div class="queue-list">
                     {% if queue_items %}
@@ -74,23 +93,6 @@
                     <p class="empty">No fights are currently queued.</p>
                     {% endif %}
                 </div>
-            </div>
-            <div class="card">
-                <h2>Leaderboard</h2>
-                {% if leaderboard_rows %}
-                    {% for row in leaderboard_rows %}
-                    <div class="leaderboard-mini-row">
-                        <div class="leaderboard-mini-rank">{{ row.rank }}</div>
-                        <div>
-                            <div class="leaderboard-mini-name">{{ row.robot_name }}</div>
-                            <div class="queue-meta">{{ row.roboteer_name }}</div>
-                        </div>
-                        <div class="leaderboard-mini-points">{{ row.total_pts }}</div>
-                    </div>
-                    {% endfor %}
-                {% else %}
-                <p class="empty">Leaderboard will populate once results are entered.</p>
-                {% endif %}
             </div>
         </div>
     </div>
