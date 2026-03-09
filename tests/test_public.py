@@ -432,6 +432,17 @@ class Phase6PublicViewsTests(unittest.TestCase):
         ):
             self.assertNotIn('hx-trigger="load, every ', response.text)
 
+    def test_sub_events_list_renders_from_live_page_link(self):
+        response = self.client.get(f"/events/{self.ids['event_id']}/sub-events")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("Sub-events", response.text)
+        self.assertIn("Duo Mayhem", response.text)
+        self.assertIn(
+            f'href="/events/{self.ids["event_id"]}/sub-events/1"',
+            response.text,
+        )
+
     # ------------------------------------------------------------------
     # Fallback archetype images
     # ------------------------------------------------------------------

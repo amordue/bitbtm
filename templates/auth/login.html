@@ -1,0 +1,8 @@
+{% extends "auth/base.html" %}
+
+{% block auth_content %}
+    <h1 class="login-logo">&#9881; BitBT</h1>
+    <p class="login-subtitle">Robot Combat Tournament Manager</p>
+    {% include "partials/alerts.html" %}
+    <a href="/auth/google" class="btn-google">Sign in with Google</a>
+{% endblock %}

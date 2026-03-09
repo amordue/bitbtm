@@ -1,0 +1,58 @@
+{% extends "admin/base.html" %}
+{% import "admin/partials/macros.html" as admin %}
+
+{% block admin_content %}
+<section>
+    <a href="/admin/events/{{ event.id }}" class="btn btn-sm btn-secondary admin-back-link">&larr; Event</a>
+    {% include "admin/partials/alerts.html" %}
+
+    {% set standings_actions %}
+        {% if can_generate_bracket %}
+        {{ admin.action_form(generate_bracket_action, 'Generate Bracket (Top 16)', 'btn btn-warning') }}
+        {% endif %}
+    {% endset %}
+    {% call admin.card('Qualifying Standings', standings_actions) %}
+    <p class="admin-helper-copy">{{ event.event_name }} &middot; {{ event.weight_class }}</p>
+        {% if rows %}
+        <div class="table-wrap">
+            <table>
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th></th>
+                        <th>Robot</th>
+                        <th>Roboteer</th>
+                        <th>Pts</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in rows %}
+                    <tr>
+                        <td{% if row.is_top_three %} class="admin-rank-cell is-top-three"{% endif %}>{{ row.rank }}</td>
+                        <td>
+                            {% if row.image_url %}
+                            <img src="{{ row.image_url }}" class="robot-thumb" alt="{{ row.robot_name }}">
+                            {% endif %}
+                        </td>
+                        <td>{{ row.robot_name }}</td>
+                        <td class="admin-muted-cell">{{ row.roboteer_name }}</td>
+                        <td class="admin-points-cell">{{ row.points }}</td>
+                        <td>
+                            {% if row.qualifying %}
+                            <span class="admin-qualifying-pill">Bracket</span>
+                            {% else %}
+                            <span class="admin-muted-cell">&mdash;</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <p class="empty">No results yet.</p>
+        {% endif %}
+    {% endcall %}
+</section>
+{% endblock %}

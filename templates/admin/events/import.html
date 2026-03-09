@@ -1,0 +1,45 @@
+{% extends "admin/base.html" %}
+{% import "admin/partials/macros.html" as admin %}
+
+{% block admin_content %}
+<section>
+    <a href="/admin/events/{{ event.id }}" class="btn btn-sm btn-secondary admin-back-link">&larr; Event</a>
+    {% include "admin/partials/alerts.html" %}
+
+    {% call admin.card('Import Robots - ' ~ event.event_name) %}
+    <p class="admin-meta-line">Fetch robot registrations from your Google Sheet. Select the rows to import and optionally mark any as reserves.</p>
+    {% if has_sheet_url %}
+    <p class="admin-meta-line">Already imported robots for this event? Refresh the roster from the saved event sheet URL.</p>
+    <div class="admin-form-actions" style="margin: 0.75rem 0 1rem;">
+        {{ admin.action_form('/admin/events/' ~ event.id ~ '/refresh-sheet', 'Refresh From Sheet', 'btn btn-sm btn-secondary') }}
+    </div>
+    {% endif %}
+
+    <div class="form-group">
+        <label for="sheet_url">Google Sheet URL</label>
+        <input
+            type="url"
+            id="sheet_url"
+            name="sheet_url"
+            class="form-control"
+            value="{{ event.google_sheet_url or '' }}"
+            placeholder="https://docs.google.com/spreadsheets/d/...">
+    </div>
+
+    <div class="admin-form-actions" style="margin-bottom: 1rem;">
+        <button
+            type="button"
+            class="btn btn-secondary"
+            hx-get="/admin/events/{{ event.id }}/import/preview"
+            hx-include="#sheet_url"
+            hx-target="#preview-area"
+            hx-indicator="#preview-spinner">
+            Load Preview
+        </button>
+        <span id="preview-spinner" class="htmx-indicator admin-meta-line">Loading...</span>
+    </div>
+
+    <div id="preview-area"></div>
+    {% endcall %}
+</section>
+{% endblock %}

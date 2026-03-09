@@ -1,0 +1,42 @@
+<section
+    id="{{ stats_panel.id }}"
+    class="{{ stats_panel.class_name }}"
+    {% if stats_panel.hx_get %}hx-get="{{ stats_panel.hx_get }}"{% endif %}
+    {% if stats_panel.hx_trigger %}hx-trigger="{{ stats_panel.hx_trigger }}"{% endif %}
+    {% if stats_panel.hx_swap %}hx-swap="{{ stats_panel.hx_swap }}"{% endif %}
+>
+    <a href="{{ back_href }}" class="btn btn-sm btn-secondary" style="margin-bottom:1.2rem;display:inline-block;">&lt;- Back to robot</a>
+    <h1>{{ robot_name }} stats</h1>
+    <p class="public-subtitle">{{ roboteer_name }} · {{ event_name }}</p>
+    <div class="stat-grid card">
+        {% for tile in stat_tiles %}
+        <div class="stat-tile">
+            <div class="stat-label">{{ tile.label }}</div>
+            <div class="stat-value">{{ tile.value }}</div>
+            <div class="stat-meta">{{ tile.meta }}</div>
+        </div>
+        {% endfor %}
+    </div>
+    <div class="card">
+        <h2>Performance vs other robots</h2>
+        <div class="table-wrap">
+            <table>
+                <thead><tr><th>Opponent</th><th>Record</th><th>Points</th><th>Fights</th></tr></thead>
+                <tbody>
+                    {% if h2h_rows %}
+                        {% for row in h2h_rows %}
+                        <tr>
+                            <td><a href="{{ row.href }}">{{ row.opponent_name }}</a></td>
+                            <td>{{ row.record }}</td>
+                            <td>{{ row.points }}</td>
+                            <td>{{ row.fights }}</td>
+                        </tr>
+                        {% endfor %}
+                    {% else %}
+                    <tr><td colspan="4" class="empty">No completed 1v1 opponents yet.</td></tr>
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</section>

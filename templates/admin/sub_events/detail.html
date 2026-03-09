@@ -1,0 +1,72 @@
+{% extends "admin/base.html" %}
+{% import "admin/partials/macros.html" as admin %}
+
+{% block admin_content %}
+<section>
+    <a href="/admin/events/{{ event.id }}" class="btn btn-sm btn-secondary admin-back-link">&larr; Event</a>
+    {% include "admin/partials/alerts.html" %}
+
+    {% call admin.card(classes='admin-event-hero') %}
+    <div class="admin-sub-event-header">
+        <div>
+            <h1 class="admin-event-title">{{ sub_event.name }}</h1>
+            <p class="admin-sub-event-meta">{{ sub_event.format.value }} &middot; {{ event.event_name }}</p>
+        </div>
+        <div class="admin-event-controls">
+            {% set status = sub_event.status %}
+            {% include "admin/partials/status_badge.html" %}
+        </div>
+    </div>
+    {% endcall %}
+
+    {% set team_actions %}
+        {% if can_add_team %}
+        <a href="{{ add_team_href }}" class="btn btn-sm btn-primary">+ Add Team</a>
+        {% endif %}
+    {% endset %}
+    {% call admin.card('Teams (' ~ team_count ~ ')', team_actions) %}
+        {% call admin.table(['Team', 'Robot 1', 'Robot 2', ''], team_rows, 'No teams yet. Add teams from the eligible robot pool.') %}
+            {% for team in team_rows %}
+            <tr>
+                <td><strong>{{ team.team_name }}</strong></td>
+                <td>
+                    {{ team.robot1_name }}
+                    {% if team.robot1_warning %}
+                    <span class="admin-sub-event-warning">{{ team.robot1_warning }}</span>
+                    {% endif %}
+                </td>
+                <td>
+                    {{ team.robot2_name }}
+                    {% if team.robot2_warning %}
+                    <span class="admin-sub-event-warning">{{ team.robot2_warning }}</span>
+                    {% endif %}
+                </td>
+                <td>{{ admin.action_form(team.delete_action, 'Remove', 'btn btn-sm btn-danger') }}</td>
+            </tr>
+            {% endfor %}
+        {% endcall %}
+    {% endcall %}
+
+    {% set bracket_controls %}
+        {% for action in bracket_actions %}
+        {{ admin.action_form(action.action, action.label, action.button_class) }}
+        {% endfor %}
+    {% endset %}
+    {% call admin.card('Bracket', bracket_controls) %}
+        {% if bracket_rounds %}
+            {% for round in bracket_rounds %}
+            <section class="admin-sub-event-round">
+                <p class="bracket-round-header">{{ round.label }}</p>
+                <div class="admin-bracket-stack">
+                    {% for matchup in round.matchups %}
+                    {% include "admin/partials/sub_event_matchup.html" %}
+                    {% endfor %}
+                </div>
+            </section>
+            {% endfor %}
+        {% else %}
+        <p class="empty">No bracket yet.</p>
+        {% endif %}
+    {% endcall %}
+</section>
+{% endblock %}

@@ -1,0 +1,60 @@
+{% extends "admin/base.html" %}
+{% import "admin/partials/macros.html" as admin %}
+
+{% block head %}
+    {% if reorder_enabled %}
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            const list = document.getElementById('matchup-list');
+            if (!list || typeof Sortable === 'undefined') {
+                return;
+            }
+
+            Sortable.create(list, {
+                animation: 150,
+                handle: '.admin-drag-handle',
+                onEnd: function () {
+                    const order = Array.from(list.querySelectorAll('.admin-matchup-item')).map(function (element) {
+                        return element.dataset.matchupId;
+                    });
+
+                    fetch('{{ reorder_url }}', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ order: order })
+                    });
+                }
+            });
+        });
+    </script>
+    {% endif %}
+{% endblock %}
+
+{% block admin_content %}
+<section>
+    <a href="/admin/events/{{ event.id }}" class="btn btn-sm btn-secondary admin-back-link">&larr; {{ event.event_name }}</a>
+    {% include "admin/partials/alerts.html" %}
+
+    {% set phase_actions %}
+        {% if can_complete %}
+        {{ admin.action_form(complete_action, 'Mark Round Complete', 'btn btn-success') }}
+        {% endif %}
+    {% endset %}
+    {% call admin.card(phase_label, phase_actions) %}
+    <p class="admin-phase-meta">
+        {% set status = phase.status %}
+        {% include "admin/partials/status_badge.html" %}
+        <span>{{ completed_count }}/{{ total_count }} complete</span>
+    </p>
+        {% if matchups %}
+        <ul id="matchup-list" class="admin-matchup-list">
+            {% for matchup in matchups %}
+            {% include "admin/partials/phase_matchup_item.html" %}
+            {% endfor %}
+        </ul>
+        {% else %}
+        <p class="empty">No matchups yet.</p>
+        {% endif %}
+    {% endcall %}
+</section>
+{% endblock %}

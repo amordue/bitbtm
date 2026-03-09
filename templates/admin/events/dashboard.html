@@ -1,0 +1,33 @@
+{% extends "admin/base.html" %}
+{% import "admin/partials/macros.html" as admin %}
+
+{% block admin_content %}
+<section>
+    <h1>Dashboard</h1>
+    {% include "admin/partials/alerts.html" %}
+    {% set dashboard_actions %}
+    <a href="/admin/events/new" class="btn btn-primary btn-sm">+ New Event</a>
+    {% endset %}
+    {% call admin.card('Events', dashboard_actions) %}
+        {% call admin.table(['Event', 'Weight Class', 'Status', 'Robots', 'Actions'], events, 'No events yet. Create your first event below.') %}
+            {% for event in events %}
+            <tr>
+                <td><a href="/admin/events/{{ event.id }}">{{ event.event_name }}</a></td>
+                <td>{{ event.weight_class }}</td>
+                <td>
+                    {% set status = event.status %}
+                    {% include "admin/partials/status_badge.html" %}
+                </td>
+                <td>{{ event.active_count }} (+{{ event.reserve_count }} reserve)</td>
+                <td>
+                    <div class="admin-action-cluster">
+                        <a href="/admin/events/{{ event.id }}" class="btn btn-sm btn-secondary">Manage</a>
+                        <a href="/admin/events/{{ event.id }}/import" class="btn btn-sm btn-primary">Import</a>
+                    </div>
+                </td>
+            </tr>
+            {% endfor %}
+        {% endcall %}
+    {% endcall %}
+</section>
+{% endblock %}

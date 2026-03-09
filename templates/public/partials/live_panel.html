@@ -1,0 +1,97 @@
+<section
+    id="{{ live_panel.id }}"
+    class="{{ live_panel.class_name }}"
+    {% if live_panel.hx_get %}hx-get="{{ live_panel.hx_get }}"{% endif %}
+    {% if live_panel.hx_trigger %}hx-trigger="{{ live_panel.hx_trigger }}"{% endif %}
+    {% if live_panel.hx_swap %}hx-swap="{{ live_panel.hx_swap }}"{% endif %}
+>
+    <div class="board-header">
+        <div>
+            <h1>Live Display</h1>
+            <p class="public-subtitle">{{ event.event_name }} · auto-refreshing venue screen</p>
+        </div>
+        <a href="/events/{{ event.id }}" class="btn btn-secondary">Public overview</a>
+    </div>
+    <div class="live-grid">
+        <div class="live-stage">
+            <div class="live-kicker">Now Fighting</div>
+            <h2 class="live-fight-title">{{ current_stage.title }}</h2>
+            <p class="live-fight-subtitle">{{ current_stage.subtitle }}</p>
+            <div class="live-robots">
+                {% for card in live_matchup %}
+                    {% if card.kind == 'vs' %}
+                    <div class="live-vs">VS</div>
+                    {% else %}
+                        {% if card.href %}
+                        <a href="{{ card.href }}" class="live-robot-link">
+                            <div class="live-robot-card">
+                                {% if card.image_url %}
+                                <img src="{{ card.image_url }}" class="live-robot-photo" alt="{{ card.name }}">
+                                {% else %}
+                                <div class="live-robot-photo-placeholder">{{ card.placeholder_initial }}</div>
+                                {% endif %}
+                                <div class="live-robot-overlay">
+                                    <div class="live-robot-badge">{{ card.badge }}</div>
+                                    <div class="live-robot-name">{{ card.name }}</div>
+                                    <div class="live-robot-meta">{{ card.meta }}</div>
+                                </div>
+                            </div>
+                        </a>
+                        {% else %}
+                        <div class="live-robot-card">
+                            {% if card.image_url %}
+                            <img src="{{ card.image_url }}" class="live-robot-photo" alt="{{ card.name }}">
+                            {% else %}
+                            <div class="live-robot-photo-placeholder">{{ card.placeholder_initial }}</div>
+                            {% endif %}
+                            <div class="live-robot-overlay">
+                                <div class="live-robot-badge">{{ card.badge }}</div>
+                                <div class="live-robot-name">{{ card.name }}</div>
+                                <div class="live-robot-meta">{{ card.meta }}</div>
+                            </div>
+                        </div>
+                        {% endif %}
+                    {% endif %}
+                {% endfor %}
+            </div>
+            <div class="live-stage-actions">
+                <a href="/events/{{ event.id }}/next-up" class="btn btn-secondary">Open next-up board</a>
+            </div>
+        </div>
+        <div class="live-sidebar">
+            <div class="card">
+                <h2>Up Next</h2>
+                <div class="queue-list">
+                    {% if queue_items %}
+                        {% for item in queue_items %}
+                        <div class="queue-item{% if item.current %} current{% endif %}">
+                            <div class="queue-slot">Slot {{ item.slot_number }}</div>
+                            <div class="queue-title">{{ item.title }}</div>
+                            <div class="queue-meta">{{ item.type_label }} · {{ item.meta }}</div>
+                        </div>
+                        {% endfor %}
+                    {% else %}
+                    <p class="empty">No fights are currently queued.</p>
+                    {% endif %}
+                </div>
+            </div>
+            <div class="card">
+                <h2>Leaderboard</h2>
+                {% if leaderboard_rows %}
+                    {% for row in leaderboard_rows %}
+                    <div class="leaderboard-mini-row">
+                        <div class="leaderboard-mini-rank">{{ row.rank }}</div>
+                        <div>
+                            <div class="leaderboard-mini-name">{{ row.robot_name }}</div>
+                            <div class="queue-meta">{{ row.roboteer_name }}</div>
+                        </div>
+                        <div class="leaderboard-mini-points">{{ row.total_pts }}</div>
+                    </div>
+                    {% endfor %}
+                {% else %}
+                <p class="empty">Leaderboard will populate once results are entered.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</section>

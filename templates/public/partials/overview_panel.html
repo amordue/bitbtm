@@ -1,0 +1,64 @@
+<section
+    id="{{ overview_panel.id }}"
+    class="{{ overview_panel.class_name }}"
+    {% if overview_panel.hx_get %}hx-get="{{ overview_panel.hx_get }}"{% endif %}
+    {% if overview_panel.hx_trigger %}hx-trigger="{{ overview_panel.hx_trigger }}"{% endif %}
+    {% if overview_panel.hx_swap %}hx-swap="{{ overview_panel.hx_swap }}"{% endif %}
+>
+    <h1>{{ event.event_name }}</h1>
+    <p class="public-subtitle">{{ event.weight_class }}</p>
+
+    <div class="overview-cta">
+        <a href="/events/{{ event.id }}/lookup" class="btn btn-primary">Find my robot</a>
+        <a href="/events/{{ event.id }}/leaderboard" class="btn btn-secondary">Leaderboard</a>
+        <a href="/events/{{ event.id }}/live" class="btn btn-secondary">Live display</a>
+        <a href="/events/{{ event.id }}/next-up" class="btn btn-secondary">Next up board</a>
+    </div>
+
+    <div class="card">
+        <h2>Tournament Info</h2>
+        <ul class="overview-meta-list">
+            <li><span style="color:#888;">Weight class: </span>{{ event.weight_class }}</li>
+            <li>
+                <span style="color:#888;">Status: </span>
+                {% set status = event.status %}
+                {% include "partials/status_badge.html" %}
+            </li>
+            <li><span style="color:#888;">Active robots: </span>{{ overview_stats.active_count }}</li>
+            <li><span style="color:#888;">Reserves: </span>{{ overview_stats.reserve_count }}</li>
+            <li><span style="color:#888;">Pending fights: </span>{{ overview_stats.pending_count }}</li>
+        </ul>
+    </div>
+
+    <div class="card">
+        <h2>Next Up</h2>
+        <div class="queue-list">
+            {% if next_up_items %}
+                {% for item in next_up_items %}
+                <div class="queue-item{% if loop.first %} current{% endif %}">
+                    <div class="queue-slot">Slot {{ item.slot_number }}</div>
+                    <div class="queue-title">{{ item.title }}</div>
+                    <div class="queue-meta">{{ item.type_label }} · {{ item.meta }}</div>
+                </div>
+                {% endfor %}
+            {% else %}
+                <p class="empty">No pending fights in the run order.</p>
+            {% endif %}
+        </div>
+    </div>
+
+    {% if phases %}
+    <div class="card">
+        <h2>Phases</h2>
+        <ul class="overview-phase-list">
+            {% for phase in phases %}
+            <li class="overview-phase-item">
+                <span class="overview-phase-label">{{ phase.label }}</span>
+                <span class="overview-phase-progress"> - {{ phase.completed }}/{{ phase.total }} fights complete</span>
+                <span class="badge badge-{{ phase.status }} overview-phase-badge">{{ phase.status }}</span>
+            </li>
+            {% endfor %}
+        </ul>
+    </div>
+    {% endif %}
+</section>

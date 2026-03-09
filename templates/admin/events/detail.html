@@ -1,0 +1,137 @@
+{% extends "admin/base.html" %}
+{% import "admin/partials/macros.html" as admin %}
+
+{% block admin_content %}
+<section>
+    <a href="/admin/" class="btn btn-sm btn-secondary admin-back-link">&larr; Dashboard</a>
+    {% include "admin/partials/alerts.html" %}
+
+    {% call admin.card(classes="admin-event-hero") %}
+    <div class="admin-event-header">
+        <div>
+            <h1 class="admin-event-title">{{ event.event_name }}</h1>
+            <p class="admin-event-subtitle">{{ event.weight_class }}</p>
+        </div>
+        <div class="admin-event-controls">
+            {% set status = event.status %}
+            {% include "admin/partials/status_badge.html" %}
+            {% if show_transition %}
+            {{ admin.action_form('/admin/events/' ~ event.id ~ '/transition', transition_label, 'btn btn-warning btn-sm') }}
+            {% endif %}
+            {% if event.google_sheet_url %}
+            {{ admin.action_form('/admin/events/' ~ event.id ~ '/refresh-sheet', 'Refresh From Sheet', 'btn btn-secondary btn-sm') }}
+            {% else %}
+            <a href="/admin/events/{{ event.id }}/import" class="btn btn-sm btn-secondary">Set Sheet URL</a>
+            {% endif %}
+            <a href="/admin/events/{{ event.id }}/import" class="btn btn-sm btn-primary">Import / Refresh Robots</a>
+        </div>
+    </div>
+    <p class="admin-meta-line">Sheet: {{ event.google_sheet_url or 'not set' }}</p>
+    {% endcall %}
+
+    {% set active_actions %}
+    <a href="/admin/events/{{ event.id }}/robots/add" class="btn btn-sm btn-secondary">+ Add Robot</a>
+    {% endset %}
+    {% call admin.card('Active Robots (' ~ active_robots|length ~ ')', active_actions) %}
+        {% call admin.table(['', 'Robot', 'Roboteer', 'Weapon', 'Actions'], active_robots, 'No active robots yet.') %}
+            {% for robot in active_robots %}
+            <tr>
+                <td>
+                    {% if robot.image_url %}
+                    <img src="{{ robot.image_url }}" class="robot-thumb" alt="{{ robot.image_alt }}">
+                    {% endif %}
+                </td>
+                <td>{{ robot.robot_name }}</td>
+                <td>{{ robot.roboteer_name }}</td>
+                <td>{{ robot.weapon_type }}</td>
+                <td>
+                    <div class="admin-action-cluster">
+                        <a href="/admin/events/{{ event.id }}/robots/{{ robot.robot_id }}/upload-image" class="btn btn-sm btn-secondary">Image</a>
+                        {{ admin.action_form('/admin/events/' ~ event.id ~ '/robots/' ~ robot.entry_id ~ '/set-reserve', '&rarr; Reserve', 'btn btn-sm btn-secondary') }}
+                        {% if robot.can_retire %}
+                        <a href="/admin/events/{{ event.id }}/robots/{{ robot.entry_id }}/retire" class="btn btn-sm btn-warning">Retire</a>
+                        {% endif %}
+                        {{ admin.action_form('/admin/events/' ~ event.id ~ '/robots/' ~ robot.entry_id ~ '/remove', 'Remove', 'btn btn-sm btn-danger') }}
+                    </div>
+                </td>
+            </tr>
+            {% endfor %}
+        {% endcall %}
+    {% endcall %}
+
+    {% call admin.card('Reserve Robots (' ~ reserve_robots|length ~ ')') %}
+        {% call admin.table(['Order', '', 'Robot', 'Roboteer', 'Weapon', 'Actions'], reserve_robots, 'No reserves designated.') %}
+            {% for robot in reserve_robots %}
+            <tr>
+                <td>{{ robot.position }}</td>
+                <td>
+                    {% if robot.image_url %}
+                    <img src="{{ robot.image_url }}" class="robot-thumb" alt="{{ robot.image_alt }}">
+                    {% endif %}
+                </td>
+                <td>{{ robot.robot_name }}</td>
+                <td>{{ robot.roboteer_name }}</td>
+                <td>{{ robot.weapon_type }}</td>
+                <td>
+                    <div class="admin-action-cluster">
+                        <a href="/admin/events/{{ event.id }}/robots/{{ robot.robot_id }}/upload-image" class="btn btn-sm btn-secondary">Image</a>
+                        {{ admin.action_form('/admin/events/' ~ event.id ~ '/robots/' ~ robot.entry_id ~ '/unset-reserve', '&rarr; Active', 'btn btn-sm btn-secondary') }}
+                        {% if robot.can_move_up %}
+                        {{ admin.action_form('/admin/events/' ~ event.id ~ '/robots/' ~ robot.entry_id ~ '/move-reserve/up', '&uarr;', 'btn btn-sm btn-secondary') }}
+                        {% endif %}
+                        {% if robot.can_move_down %}
+                        {{ admin.action_form('/admin/events/' ~ event.id ~ '/robots/' ~ robot.entry_id ~ '/move-reserve/down', '&darr;', 'btn btn-sm btn-secondary') }}
+                        {% endif %}
+                        {{ admin.action_form('/admin/events/' ~ event.id ~ '/robots/' ~ robot.entry_id ~ '/remove', 'Remove', 'btn btn-sm btn-danger') }}
+                    </div>
+                </td>
+            </tr>
+            {% endfor %}
+        {% endcall %}
+    {% endcall %}
+
+    {% set phase_actions_markup %}
+        {% for phase_action in phase_actions %}
+        {{ admin.action_form(phase_action.action, phase_action.label, phase_action.button_class) }}
+        {% endfor %}
+    {% endset %}
+    {% call admin.card('Phases', phase_actions_markup) %}
+        {% call admin.table(['Phase', 'Status', 'Fights', ''], phases, 'No phases yet. Transition to "Qualifying" to generate all qualifying rounds.') %}
+            {% for phase in phases %}
+            <tr>
+                <td>{{ phase.label }}</td>
+                <td>
+                    {% set status = phase.status %}
+                    {% include "admin/partials/status_badge.html" %}
+                </td>
+                <td>{{ phase.progress }}</td>
+                <td><a href="{{ phase.manage_href }}" class="btn btn-sm btn-secondary">{{ phase.manage_label }}</a></td>
+            </tr>
+            {% endfor %}
+        {% endcall %}
+    {% endcall %}
+
+    {% set sub_event_actions %}
+        {% if can_create_sub_event %}
+        <a href="/admin/events/{{ event.id }}/sub-events/new" class="btn btn-sm btn-primary">+ New Sub-event</a>
+        {% endif %}
+        <a href="/admin/events/{{ event.id }}/run-order" class="btn btn-sm btn-secondary">Run Order</a>
+    {% endset %}
+    {% call admin.card('Sub-events', sub_event_actions) %}
+        {% call admin.table(['Name', 'Format', 'Status', 'Teams', ''], sub_events, 'No sub-events yet.' ~ ('' if can_create_sub_event else ' Create one once bracket round 1 is complete.')) %}
+            {% for sub_event in sub_events %}
+            <tr>
+                <td>{{ sub_event.name }}</td>
+                <td>{{ sub_event.format }}</td>
+                <td>
+                    {% set status = sub_event.status %}
+                    {% include "admin/partials/status_badge.html" %}
+                </td>
+                <td>{{ sub_event.team_count }} team(s)</td>
+                <td><a href="/admin/events/{{ event.id }}/sub-events/{{ sub_event.id }}" class="btn btn-sm btn-secondary">Manage</a></td>
+            </tr>
+            {% endfor %}
+        {% endcall %}
+    {% endcall %}
+</section>
+{% endblock %}

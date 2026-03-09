@@ -12,37 +12,6 @@ from urllib.parse import parse_qs, urlencode, urlparse
 
 from fastapi import APIRouter, Depends, File, Form, Query, Request, UploadFile
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
-from fasthtml.common import (
-    A,
-    Button,
-    Div,
-    H1,
-    H2,
-    H3,
-    Header,
-    Img,
-    Input,
-    Label,
-    Li,
-    Nav,
-    NotStr,
-    Option,
-    P,
-    Script,
-    Select,
-    Small,
-    Span,
-    Strong,
-    Table,
-    Tbody,
-    Td,
-    Th,
-    Thead,
-    Tr,
-    Ul,
-    Form as HForm,
-    to_xml,
-)
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
@@ -105,83 +74,13 @@ from models import (
     User,
 )
 from scoring import BYE_POINTS, FIGHT_OUTCOMES, outcome_to_points, points_to_outcome_label
-from ui import HTMX_SCRIPT_URL, page_response, status_badge
 from robot_images import robot_display_image_url
+from ui import HTMX_SCRIPT_URL, render_template
 
 router = APIRouter(prefix="/admin")
 
 # ---------------------------------------------------------------------------
-# Styling
-# ---------------------------------------------------------------------------
-
-_CSS = """
-/* Phase 5 extras */
-.matchup-list { list-style: none; }
-.matchup-item {
-    display: flex; align-items: center; gap: 0.75rem;
-    padding: 0.6rem 0.75rem;
-    border: 1px solid #2a2a2a; border-radius: 6px;
-    margin-bottom: 0.4rem; background: #1a1a1a;
-    cursor: default;
-}
-.matchup-item.is-bye { opacity: 0.65; }
-.drag-handle { cursor: grab; color: #444; font-size: 1.1rem; flex-shrink: 0; }
-.matchup-robots { flex: 1; font-size: 0.9rem; }
-.matchup-vs { color: #555; margin: 0 0.4rem; font-size: 0.8rem; }
-.matchup-result-label { font-size: 0.8rem; color: #4ade80; margin-left: auto; white-space: nowrap; }
-.matchup-result-pending { font-size: 0.8rem; color: #555; margin-left: auto; white-space: nowrap; }
-.bracket-round-header {
-    font-size: 0.8rem; font-weight: 700; text-transform: uppercase;
-    letter-spacing: 0.06em; color: #666; padding: 0.4rem 0;
-    border-bottom: 1px solid #252525; margin: 1rem 0 0.6rem;
-}
-.bracket-matchup {
-    display: flex; align-items: stretch;
-    border: 1px solid #2a2a2a; border-radius: 6px;
-    margin-bottom: 0.4rem; overflow: hidden;
-}
-.bracket-matchup-robots { flex: 1; }
-.bracket-robot-row {
-    display: flex; align-items: center; padding: 0.35rem 0.75rem;
-    font-size: 0.88rem; gap: 0.5rem;
-}
-.bracket-robot-row + .bracket-robot-row { border-top: 1px solid #222; }
-.bracket-robot-winner { background: #0f2a18; }
-.bracket-robot-pts { margin-left: auto; font-weight: 700; font-size: 0.85rem; }
-.topbar {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 1rem 2rem;
-    border-bottom: 1px solid #2a2a2a;
-    background: #161616;
-}
-.topbar-title { font-size: 1.2rem; font-weight: 700; color: #f0f0f0; }
-.topbar-right { display: flex; align-items: center; gap: 1.5rem; font-size: 0.85rem; color: #888; }
-.logout { color: #666; font-size: 0.85rem; }
-.logout:hover { color: #f0f0f0; text-decoration: none; }
-.content { padding: 2rem; max-width: 1100px; margin: 0 auto; }
-h1 { font-size: 1.7rem; margin-bottom: 1.5rem; }
-h2 { font-size: 1.2rem; margin-bottom: 1rem; }
-h3 { font-size: 1rem; font-weight: 600; margin-bottom: 0.75rem; }
-.card { padding: 1.5rem; margin-bottom: 1.5rem; }
-.card-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 1rem;
-}
-tr:hover td { background: #1e1e1e; }
-.robot-thumb { width: 40px; height: 40px; object-fit: cover; border-radius: 4px; }
-/* Inline form (for small action buttons inside table rows) */
-.inline-form { display: inline; }
-/* Preview table specifics */
-.preview-status-new { color: #4ade80; font-size: 0.8rem; }
-.preview-status-dup { color: #f59e0b; font-size: 0.8rem; }
-"""
-
-# ---------------------------------------------------------------------------
-# Shared page builder
+# Shared page state
 # ---------------------------------------------------------------------------
 
 _NEXT_STATUS: dict[EventStatus, EventStatus] = {
@@ -199,53 +98,6 @@ _TRANSITION_LABELS: dict[EventStatus, str] = {
     EventStatus.bracket: "Move to Sub-events",
     EventStatus.sub_events: "Complete Event",
 }
-
-
-def _status_badge(status: EventStatus) -> Span:
-    return status_badge(status)
-
-
-def _refresh_sheet_action(event_id: int, has_sheet_url: bool):
-    """Render the refresh-sheet control or a setup link when no sheet is saved."""
-    if not has_sheet_url:
-        return A(
-            "Set Sheet URL",
-            href=f"/admin/events/{event_id}/import",
-            cls="btn btn-sm btn-secondary",
-        )
-
-    return HForm(
-        Button(
-            "Refresh From Sheet",
-            type="submit",
-            cls="btn btn-sm btn-secondary",
-        ),
-        method="post",
-        action=f"/admin/events/{event_id}/refresh-sheet",
-        style="display:inline;",
-    )
-
-
-def _topbar(user: User) -> Header:
-    return Header(
-        Span("⚙ BitBT Admin", cls="topbar-title"),
-        Div(
-            Span(f"{user.name} ({user.email})"),
-            A("Sign out", href="/auth/logout", cls="logout"),
-            cls="topbar-right",
-        ),
-        cls="topbar",
-    )
-
-
-def _page(title: str, *body_content, user: Optional[User] = None) -> HTMLResponse:
-    body_children = []
-    if user:
-        body_children.append(_topbar(user))
-    body_children.append(Div(*body_content, cls="content"))
-    return page_response(title, *body_children, css=_CSS, script_srcs=(HTMX_SCRIPT_URL,))
-
-
 # ---------------------------------------------------------------------------
 # 1. Dashboard — list of events
 # ---------------------------------------------------------------------------
@@ -261,14 +113,15 @@ def admin_dashboard(
     """Organizer dashboard — shows all events."""
     events = db.query(Event).filter(Event.organizer_id == user.id).order_by(Event.created_at.desc()).all()
 
-    flash = ""
+    success_message = ""
+    info_message = ""
     if msg == "created":
-        flash = Div("Event created successfully.", cls="alert alert-success")
+        success_message = "Event created successfully."
     elif msg == "deleted":
-        flash = Div("Event removed.", cls="alert alert-info")
+        info_message = "Event removed."
 
+    event_rows = []
     if events:
-        rows = []
         for ev in events:
             active_count = (
                 db.query(EventRobot)
@@ -280,43 +133,32 @@ def admin_dashboard(
                 .filter(EventRobot.event_id == ev.id, EventRobot.is_reserve == True)
                 .count()
             )
-            rows.append(
-                Tr(
-                    Td(A(ev.event_name, href=f"/admin/events/{ev.id}")),
-                    Td(ev.weight_class),
-                    Td(_status_badge(ev.status)),
-                    Td(f"{active_count} (+{reserve_count} reserve)"),
-                    Td(
-                        A("Manage", href=f"/admin/events/{ev.id}", cls="btn btn-sm btn-secondary"),
-                        " ",
-                        A("Import", href=f"/admin/events/{ev.id}/import", cls="btn btn-sm btn-primary"),
-                    ),
-                )
+            event_rows.append(
+                {
+                    "id": ev.id,
+                    "event_name": ev.event_name,
+                    "weight_class": ev.weight_class,
+                    "status": ev.status,
+                    "active_count": active_count,
+                    "reserve_count": reserve_count,
+                }
             )
-        events_table = Div(
-            Table(
-                Thead(Tr(Th("Event"), Th("Weight Class"), Th("Status"), Th("Robots"), Th("Actions"))),
-                Tbody(*rows),
-            ),
-            cls="table-wrap",
-        )
-    else:
-        events_table = P("No events yet. Create your first event below.", cls="empty")
 
-    page = Div(
-        H1("Dashboard"),
-        flash if flash else "",
-        Div(
-            Div(
-                H2("Events"),
-                A("+ New Event", href="/admin/events/new", cls="btn btn-primary btn-sm"),
-                cls="card-header",
-            ),
-            events_table,
-            cls="card",
-        ),
+    return render_template(
+        request,
+        "admin/events/dashboard.html",
+        title="Dashboard",
+        context={
+            "user": user,
+            "events": event_rows,
+            "error_message": "",
+            "success_message": success_message,
+            "info_message": info_message,
+        },
+        stylesheets=("css/admin.css",),
+        script_srcs=(HTMX_SCRIPT_URL,),
+        body_class="admin-page",
     )
-    return _page("Dashboard", page, user=user)
 
 
 # ---------------------------------------------------------------------------
@@ -330,61 +172,20 @@ def new_event_form(
     user: User = Depends(require_organizer),
     error: str = Query(default=""),
 ):
-    err_el = Div(error, cls="alert alert-error") if error else ""
-    form = Div(
-        H1("New Event"),
-        err_el if err_el else "",
-        Div(
-            HForm(
-                Div(
-                    Label("Event Name", for_="event_name"),
-                    Input(
-                        type="text",
-                        id="event_name",
-                        name="event_name",
-                        cls="form-control",
-                        placeholder="e.g. Steel City Smashdown 2026",
-                        required=True,
-                        autofocus=True,
-                    ),
-                    cls="form-group",
-                ),
-                Div(
-                    Label("Weight Class", for_="weight_class"),
-                    Input(
-                        type="text",
-                        id="weight_class",
-                        name="weight_class",
-                        cls="form-control",
-                        placeholder="e.g. Beetleweight (150g)",
-                        required=True,
-                    ),
-                    cls="form-group",
-                ),
-                Div(
-                    Label("Google Sheet URL (optional — can be set later)", for_="google_sheet_url"),
-                    Input(
-                        type="url",
-                        id="google_sheet_url",
-                        name="google_sheet_url",
-                        cls="form-control",
-                        placeholder="https://docs.google.com/spreadsheets/d/...",
-                    ),
-                    cls="form-group",
-                ),
-                Div(
-                    Button("Create Event", type="submit", cls="btn btn-primary"),
-                    " ",
-                    A("Cancel", href="/admin/", cls="btn btn-secondary"),
-                    cls="form-group",
-                ),
-                method="post",
-                action="/admin/events",
-            ),
-            cls="card",
-        ),
+    return render_template(
+        request,
+        "admin/events/new.html",
+        title="New Event",
+        context={
+            "user": user,
+            "error_message": error,
+            "success_message": "",
+            "info_message": "",
+        },
+        stylesheets=("css/admin.css",),
+        script_srcs=(HTMX_SCRIPT_URL,),
+        body_class="admin-page",
     )
-    return _page("New Event", form, user=user)
 
 
 @router.post("/events")
@@ -427,15 +228,16 @@ def event_detail(
     user: User = Depends(require_organizer),
     db: Session = Depends(get_db),
     msg: str = Query(default=""),
+    error: str = Query(default=""),
     img_warn: list[str] = Query(default=[]),
 ):
     ev = _get_event_or_404(event_id, user.id, db)
 
-    # Flash message
     flash_map = {
         "created": ("Event created.", "success"),
         "imported": ("Robots imported successfully.", "success"),
         "refreshed": ("Sheet refreshed — new robots imported.", "success"),
+        "refresh_error": ("Unable to refresh from the saved Google Sheet.", "error"),
         "removed": ("Robot removed from roster.", "info"),
         "added": ("Robot added to roster.", "success"),
         "retired": ("Robot retired and replaced by reserve.", "success"),
@@ -458,123 +260,40 @@ def event_detail(
         "team_created": ("Team created.", "success"),
         "team_deleted": ("Team removed.", "info"),
     }
-    flash = ""
+    error_message = ""
+    success_message = ""
+    info_message = ""
     if msg in flash_map:
         text, kind = flash_map[msg]
-        flash = Div(text, cls=f"alert alert-{kind}")
+        if kind == "error":
+            error_message = text
+        elif kind == "success":
+            success_message = text
+        elif kind == "info":
+            info_message = text
+    if error:
+        error_message = error
+    elif msg == "error":
+        error_message = "Unable to complete that action."
 
-    warning_flash = ""
+    warning_message = ""
+    warning_items: list[str] = []
     if img_warn:
-        warning_flash = Div(
-            P(
-                "Some robot images could not be downloaded; the original sheet URLs were kept instead.",
-                style="margin-bottom:0.5rem;",
-            ),
-            Ul(*(Li(warning) for warning in img_warn)),
-            cls="alert alert-error",
+        warning_message = (
+            "Some robot images could not be downloaded; the original sheet URLs were kept instead."
         )
+        warning_items = img_warn
 
-    # Active robots and reserves
     active_ers = active_event_robots(event_id, db)
     reserve_ers = reserve_event_robots(event_id, db)
-
-    # Phases
     phases = ordered_event_phases(event_id, db)
 
-    # --- Event header card ---
     next_status = _NEXT_STATUS.get(ev.status)
-    transition_btn = ""
-    if next_status:
-        transition_btn = HForm(
-            Button(
-                _TRANSITION_LABELS[ev.status],
-                type="submit",
-                cls="btn btn-warning btn-sm",
-            ),
-            method="post",
-            action=f"/admin/events/{event_id}/transition",
-            style="display:inline;",
-        )
-
-    sheet_info = Small(
-        f"Sheet: {ev.google_sheet_url or 'not set'}", style="color:#666;"
-    )
-    header_card = Div(
-        Div(
-            Div(
-                H2(ev.event_name),
-                Small(ev.weight_class, style="color:#888;margin-left:0.6rem;"),
-            ),
-            Div(
-                _status_badge(ev.status),
-                " ",
-                transition_btn,
-                " ",
-                _refresh_sheet_action(event_id, bool(ev.google_sheet_url)),
-                " ",
-                A("Import / Refresh Robots", href=f"/admin/events/{event_id}/import", cls="btn btn-sm btn-primary"),
-                style="display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap;",
-            ),
-            cls="card-header",
-        ),
-        sheet_info,
-        cls="card",
-    )
-
-    # --- Active robots table ---
-    if active_ers:
-        robot_rows = [_robot_roster_row(er, event_id, phases, is_reserve=False) for er in active_ers]
-        robot_table = Div(
-            Table(
-                Thead(Tr(
-                    Th(""), Th("Robot"), Th("Roboteer"), Th("Weapon"), Th("Actions"),
-                )),
-                Tbody(*robot_rows),
-            ),
-            cls="table-wrap",
-        )
-    else:
-        robot_table = P("No active robots yet.", cls="empty")
-
-    active_card = Div(
-        Div(
-            H2(f"Active Robots ({len(active_ers)})"),
-            A("+ Add Robot", href=f"/admin/events/{event_id}/robots/add", cls="btn btn-sm btn-secondary"),
-            cls="card-header",
-        ),
-        robot_table,
-        cls="card",
-    )
-
-    # --- Reserves table ---
-    if reserve_ers:
-        reserve_rows = [_robot_roster_row(er, event_id, phases, is_reserve=True, position=i) for i, er in enumerate(reserve_ers)]
-        reserve_table = Div(
-            Table(
-                Thead(Tr(Th("Order"), Th(""), Th("Robot"), Th("Roboteer"), Th("Weapon"), Th("Actions"))),
-                Tbody(*reserve_rows),
-            ),
-            cls="table-wrap",
-        )
-    else:
-        reserve_table = P("No reserves designated.", cls="empty")
-
-    reserves_card = Div(
-        Div(
-            H2(f"Reserve Robots ({len(reserve_ers)})"),
-            cls="card-header",
-        ),
-        reserve_table,
-        cls="card",
-    )
-
-    # --- Phases card ---
-    # ---- Phase 5: qualifying actions / bracket generation ----
     qual_phases = qualifying_phases(phases)
     bracket_phase = next((ph for ph in phases if ph.phase_type == PhaseType.bracket), None)
     num_complete_qual = sum(1 for ph in qual_phases if ph.status == PhaseStatus.complete)
 
-    phase_actions = []
+    phase_actions: list[dict[str, str]] = []
     if ev.status == EventStatus.qualifying:
         max_qual = max((ph.phase_number for ph in qual_phases), default=0)
         last_qual = next((ph for ph in qual_phases if ph.phase_number == max_qual), None)
@@ -583,206 +302,257 @@ def event_detail(
         )
         if last_qual is None or (last_qual.status == PhaseStatus.complete and max_qual < 3):
             next_round = max_qual + 1
-            phase_actions.append(
-                HForm(
-                    Button(f"Generate Round {next_round}", type="submit", cls="btn btn-primary btn-sm"),
-                    method="post",
-                    action=f"/admin/events/{event_id}/qualifying/generate",
-                    style="display:inline;",
-                )
-            )
+            phase_actions.append({
+                "label": f"Generate Round {next_round}",
+                "action": f"/admin/events/{event_id}/qualifying/generate",
+                "button_class": "btn btn-primary btn-sm",
+            })
         if last_qual and last_all_done and last_qual.status == PhaseStatus.active:
-            phase_actions.append(
-                HForm(
-                    Button(f"Complete Round {max_qual}", type="submit", cls="btn btn-success btn-sm"),
-                    method="post",
-                    action=f"/admin/events/{event_id}/phases/{last_qual.id}/complete",
-                    style="display:inline;",
-                )
-            )
+            phase_actions.append({
+                "label": f"Complete Round {max_qual}",
+                "action": f"/admin/events/{event_id}/phases/{last_qual.id}/complete",
+                "button_class": "btn btn-success btn-sm",
+            })
         if num_complete_qual >= 3 and not bracket_phase:
-            phase_actions.append(
-                HForm(
-                    Button("Generate Bracket (Top 16)", type="submit", cls="btn btn-warning btn-sm"),
-                    method="post",
-                    action=f"/admin/events/{event_id}/bracket/generate",
-                    style="display:inline;",
-                )
-            )
+            phase_actions.append({
+                "label": "Generate Bracket (Top 16)",
+                "action": f"/admin/events/{event_id}/bracket/generate",
+                "button_class": "btn btn-warning btn-sm",
+            })
 
-    if phases:
-        phase_rows = []
-        for ph in phases:
-            total_m = len(ph.matchups)
-            done_m = sum(1 for m in ph.matchups if m.status == MatchupStatus.completed)
-            if ph.phase_type == PhaseType.qualifying:
-                label = f"Qualifying Round {ph.phase_number}"
-                manage_link = A("Manage", href=f"/admin/events/{event_id}/phases/{ph.id}", cls="btn btn-sm btn-secondary")
-            else:
-                label = "Bracket"
-                manage_link = A("Manage Bracket", href=f"/admin/events/{event_id}/bracket", cls="btn btn-sm btn-secondary")
-            phase_rows.append(Tr(
-                Td(label),
-                Td(Span(ph.status.value, cls=f"badge badge-{ph.status.value}")),
-                Td(f"{done_m}/{total_m}"),
-                Td(manage_link),
-            ))
-        phases_table = Div(
-            Table(
-                Thead(Tr(Th("Phase"), Th("Status"), Th("Fights"), Th(""))),
-                Tbody(*phase_rows),
-            ),
-            cls="table-wrap",
-        )
-    else:
-        phases_table = P(
-            "No phases yet. Transition to \"Qualifying\" to generate all qualifying rounds.",
-            cls="empty",
-        )
-
-    phases_card = Div(
-        Div(
-            H2("Phases"),
-            Div(*[act for act in phase_actions], style="display:flex;gap:0.5rem;flex-wrap:wrap;") if phase_actions else "",
-            cls="card-header",
-        ),
-        phases_table,
-        cls="card",
-    )
-
-    # --- Sub-events card ---
     sub_events = ordered_sub_events(event_id, db)
-
-    # Show "Create Sub-event" button when bracket round 1 is complete (or event in sub_events)
     r1_done = round_one_complete(bracket_phase)
-
     can_create_sub_event = r1_done or ev.status in (EventStatus.sub_events, EventStatus.complete)
 
-    se_actions = []
-    if can_create_sub_event:
-        se_actions.append(
-            A("+ New Sub-event", href=f"/admin/events/{event_id}/sub-events/new", cls="btn btn-sm btn-primary")
+    active_robots = [_roster_row_context(er, event_id, phases, is_reserve=False) for er in active_ers]
+    reserve_robots = [
+        _roster_row_context(
+            er,
+            event_id,
+            phases,
+            is_reserve=True,
+            position=index,
+            total_reserves=len(reserve_ers),
         )
-    se_actions.append(
-        A("Run Order", href=f"/admin/events/{event_id}/run-order", cls="btn btn-sm btn-secondary")
+        for index, er in enumerate(reserve_ers)
+    ]
+
+    phase_rows = []
+    for ph in phases:
+        total_matchups = len(ph.matchups)
+        completed_matchups = sum(1 for matchup in ph.matchups if matchup.status == MatchupStatus.completed)
+        if ph.phase_type == PhaseType.qualifying:
+            label = f"Qualifying Round {ph.phase_number}"
+            manage_href = f"/admin/events/{event_id}/phases/{ph.id}"
+            manage_label = "Manage"
+        else:
+            label = "Bracket"
+            manage_href = f"/admin/events/{event_id}/bracket"
+            manage_label = "Manage Bracket"
+        phase_rows.append({
+            "label": label,
+            "status": ph.status,
+            "progress": f"{completed_matchups}/{total_matchups}",
+            "manage_href": manage_href,
+            "manage_label": manage_label,
+        })
+
+    sub_event_rows = []
+    for sub_event in sub_events:
+        team_count = db.query(SubEventTeam).filter(SubEventTeam.sub_event_id == sub_event.id).count()
+        sub_event_rows.append({
+            "id": sub_event.id,
+            "name": sub_event.name,
+            "format": sub_event.format.value,
+            "status": sub_event.status,
+            "team_count": team_count,
+        })
+
+    return render_template(
+        request,
+        "admin/events/detail.html",
+        title=ev.event_name,
+        context={
+            "user": user,
+            "event": ev,
+            "error_message": error_message,
+            "success_message": success_message,
+            "info_message": info_message,
+            "warning_message": warning_message,
+            "warning_items": warning_items,
+            "show_transition": next_status is not None,
+            "transition_label": _TRANSITION_LABELS.get(ev.status, ""),
+            "active_robots": active_robots,
+            "reserve_robots": reserve_robots,
+            "phase_actions": phase_actions,
+            "phases": phase_rows,
+            "sub_events": sub_event_rows,
+            "can_create_sub_event": can_create_sub_event,
+        },
+        stylesheets=("css/admin.css",),
+        script_srcs=(HTMX_SCRIPT_URL,),
+        body_class="admin-page",
     )
-
-    if sub_events:
-        se_rows = []
-        for se in sub_events:
-            team_count = db.query(SubEventTeam).filter(SubEventTeam.sub_event_id == se.id).count()
-            se_rows.append(Tr(
-                Td(se.name),
-                Td(se.format.value),
-                Td(Span(se.status.value, cls=f"badge badge-{se.status.value}")),
-                Td(f"{team_count} team(s)"),
-                Td(A("Manage", href=f"/admin/events/{event_id}/sub-events/{se.id}", cls="btn btn-sm btn-secondary")),
-            ))
-        se_table = Div(
-            Table(
-                Thead(Tr(Th("Name"), Th("Format"), Th("Status"), Th("Teams"), Th(""))),
-                Tbody(*se_rows),
-            ),
-            cls="table-wrap",
-        )
-    else:
-        se_table = P(
-            "No sub-events yet." + (" Create one once bracket round 1 is complete." if not can_create_sub_event else ""),
-            cls="empty",
-        )
-
-    sub_events_card = Div(
-        Div(
-            H2("Sub-events"),
-            Div(*se_actions, style="display:flex;gap:0.5rem;"),
-            cls="card-header",
-        ),
-        se_table,
-        cls="card",
-    )
-
-    page = Div(
-        A("← Dashboard", href="/admin/", cls="btn btn-sm btn-secondary", style="margin-bottom:1.2rem;display:inline-block;"),
-        flash if flash else "",
-        warning_flash if warning_flash else "",
-        header_card,
-        active_card,
-        reserves_card,
-        phases_card,
-        sub_events_card,
-    )
-    return _page(ev.event_name, page, user=user)
-
-
-def _robot_roster_row(
+def _roster_row_context(
     er: EventRobot,
     event_id: int,
     phases: list,
+    *,
     is_reserve: bool,
     position: int = 0,
-) -> Tr:
+    total_reserves: int = 0,
+) -> dict[str, object]:
     robot: Robot = er.robot
-    reer: Roboteer = robot.roboteer
+    return {
+        "entry_id": er.id,
+        "robot_id": robot.id,
+        "robot_name": robot.robot_name,
+        "roboteer_name": robot.roboteer.roboteer_name,
+        "weapon_type": robot.weapon_type or "—",
+        "image_url": robot_display_image_url(robot),
+        "image_alt": robot.robot_name,
+        "is_reserve": is_reserve,
+        "position": position + 1,
+        "can_retire": bool(phases) and not is_reserve,
+        "can_move_up": is_reserve and position > 0,
+        "can_move_down": is_reserve and position < total_reserves - 1,
+        "event_id": event_id,
+    }
+def _flash_context(
+    msg: str,
+    flash_map: dict[str, tuple[str, str]],
+    *,
+    error: str = "",
+    fallback_error: str = "",
+) -> dict[str, str]:
+    error_message = ""
+    success_message = ""
+    info_message = ""
 
-    thumb = ""
-    img_url = robot_display_image_url(robot)
-    if img_url:
-        thumb = Img(src=img_url, cls="robot-thumb", alt=robot.robot_name)
+    if msg in flash_map:
+        text, kind = flash_map[msg]
+        if kind == "error":
+            error_message = text
+        elif kind == "success":
+            success_message = text
+        elif kind == "info":
+            info_message = text
 
-    # Actions
-    actions = [
-        A("Image", href=f"/admin/events/{event_id}/robots/{robot.id}/upload-image", cls="btn btn-sm btn-secondary"),
-        " ",
-    ]
+    if error:
+        error_message = error
+    elif msg == "error" and fallback_error:
+        error_message = fallback_error
 
-    if is_reserve:
-        actions += [
-            _inline_post_btn(f"/admin/events/{event_id}/robots/{er.id}/unset-reserve", "→ Active", "btn-sm btn-secondary"),
-            " ",
-            _inline_post_btn(f"/admin/events/{event_id}/robots/{er.id}/move-reserve/up", "↑", "btn-sm btn-secondary"),
-            " ",
-            _inline_post_btn(f"/admin/events/{event_id}/robots/{er.id}/move-reserve/down", "↓", "btn-sm btn-secondary"),
-            " ",
-        ]
+    return {
+        "error_message": error_message,
+        "success_message": success_message,
+        "info_message": info_message,
+    }
+
+
+def _points_for_matchup_robot(matchup: Matchup, robot_id: int | None) -> int | None:
+    if robot_id is None:
+        return None
+    result = next((item for item in matchup.results if item.robot_id == robot_id), None)
+    return result.points_scored if result else 0
+
+
+def _outcome_code_for_points(r1_pts: int, r2_pts: int) -> str:
+    for code, _label in FIGHT_OUTCOMES:
+        code_r1_pts, code_r2_pts = outcome_to_points(code)
+        if (code_r1_pts, code_r2_pts) == (r1_pts, r2_pts):
+            return code
+    return ""
+
+
+def _phase_matchup_context(matchup: Matchup, event_id: int, phase: Phase) -> dict[str, object]:
+    robot1 = matchup.robot1
+    robot2 = matchup.robot2
+    is_bye = robot2 is None
+    r1_pts = _points_for_matchup_robot(matchup, robot1.id)
+    r2_pts = _points_for_matchup_robot(matchup, robot2.id if robot2 else None)
+
+    if is_bye:
+        status_text = f"+{BYE_POINTS} pts (bye)" if matchup.status == MatchupStatus.completed else "Bye pending"
+    elif matchup.status == MatchupStatus.completed and r1_pts is not None and r2_pts is not None:
+        status_text = f"{points_to_outcome_label(r1_pts, r2_pts)} ({r1_pts}-{r2_pts})"
     else:
-        actions += [
-            _inline_post_btn(f"/admin/events/{event_id}/robots/{er.id}/set-reserve", "→ Reserve", "btn-sm btn-secondary"),
-            " ",
-        ]
-        if phases:
-            actions += [
-                A(
-                    "Retire",
-                    href=f"/admin/events/{event_id}/robots/{er.id}/retire",
-                    cls="btn btn-sm btn-warning",
-                ),
-                " ",
-            ]
+        status_text = "Pending"
 
-    actions.append(
-        _inline_post_btn(f"/admin/events/{event_id}/robots/{er.id}/remove", "Remove", "btn-sm btn-danger"),
-    )
+    can_score = robot2 is not None and phase.status == PhaseStatus.active
+    can_complete_bye = is_bye and matchup.status == MatchupStatus.pending and phase.status == PhaseStatus.active
 
-    cells = [
-        Td(thumb),
-        Td(robot.robot_name),
-        Td(reer.roboteer_name),
-        Td(robot.weapon_type or "—"),
-        Td(*actions),
-    ]
-    if is_reserve:
-        cells = [Td(str(position + 1))] + cells
-    return Tr(*cells)
+    return {
+        "id": matchup.id,
+        "robot1_name": robot1.robot_name,
+        "robot2_name": robot2.robot_name if robot2 else "BYE",
+        "is_bye": is_bye,
+        "is_completed": matchup.status == MatchupStatus.completed,
+        "status_text": status_text,
+        "score_href": f"/admin/events/{event_id}/matchups/{matchup.id}/score" if can_score else "",
+        "score_label": "Edit" if matchup.status == MatchupStatus.completed else "Score",
+        "complete_bye_action": f"/admin/events/{event_id}/matchups/{matchup.id}/complete-bye" if can_complete_bye else "",
+        "show_drag_handle": phase.status == PhaseStatus.active,
+    }
 
 
-def _inline_post_btn(action_url: str, label: str, extra_cls: str = "") -> HForm:
-    """Small single-button form for POST actions (renders as inline element)."""
-    return HForm(
-        Button(label, type="submit", cls=f"btn {extra_cls}"),
-        method="post",
-        action=action_url,
-        style="display:inline;",
-    )
+def _score_option_context(matchup: Matchup) -> list[dict[str, str]]:
+    robot1 = matchup.robot1
+    robot2 = matchup.robot2
+    selected_code = ""
+
+    if matchup.status == MatchupStatus.completed:
+        r1_pts = _points_for_matchup_robot(matchup, robot1.id) or 0
+        r2_pts = _points_for_matchup_robot(matchup, robot2.id if robot2 else None) or 0
+        selected_code = _outcome_code_for_points(r1_pts, r2_pts)
+
+    options = []
+    for code, label in FIGHT_OUTCOMES:
+        display = label.replace("Robot 1", robot1.robot_name).replace(
+            "Robot 2", robot2.robot_name if robot2 else "Robot 2"
+        )
+        options.append({
+            "value": code,
+            "label": display,
+            "selected": code == selected_code,
+        })
+    return options
+
+
+def _bracket_matchup_context(matchup: Matchup, event_id: int) -> dict[str, object]:
+    robot1 = matchup.robot1
+    robot2 = matchup.robot2
+    r1_pts = _points_for_matchup_robot(matchup, robot1.id)
+    r2_pts = _points_for_matchup_robot(matchup, robot2.id if robot2 else None)
+
+    robot1_winner = False
+    robot2_winner = False
+    if matchup.status == MatchupStatus.completed:
+        if robot2 is None:
+            robot1_winner = True
+        elif r1_pts is not None and r2_pts is not None:
+            robot1_winner = r1_pts >= r2_pts
+            robot2_winner = r2_pts > r1_pts
+
+    return {
+        "id": matchup.id,
+        "robot1": {
+            "name": robot1.robot_name,
+            "href": f"/events/{event_id}/robot/{robot1.id}",
+            "points": r1_pts,
+            "is_winner": robot1_winner,
+        },
+        "robot2": {
+            "name": robot2.robot_name if robot2 else "TBD",
+            "href": f"/events/{event_id}/robot/{robot2.id}" if robot2 else "",
+            "points": r2_pts,
+            "is_winner": robot2_winner,
+            "is_tbd": robot2 is None,
+        },
+        "is_completed": matchup.status == MatchupStatus.completed,
+        "action_href": f"/admin/events/{event_id}/matchups/{matchup.id}/score",
+        "action_label": "Edit" if matchup.status == MatchupStatus.completed else "Score",
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -799,66 +569,24 @@ def import_page(
     error: str = Query(default=""),
 ):
     ev = _get_event_or_404(event_id, user.id, db)
-
-    err_el = Div(error, cls="alert alert-error") if error else ""
-
-    sheet_url_field = Div(
-        Label("Google Sheet URL", for_="sheet_url"),
-        Input(
-            type="url",
-            id="sheet_url",
-            name="sheet_url",
-            cls="form-control",
-            value=ev.google_sheet_url or "",
-            placeholder="https://docs.google.com/spreadsheets/d/...",
-            style="margin-bottom:0.75rem;",
-        ),
-        cls="form-group",
+    return render_template(
+        request,
+        "admin/events/import.html",
+        title="Import Robots",
+        context={
+            "user": user,
+            "event": ev,
+            "error_message": error,
+            "success_message": "",
+            "info_message": "",
+            "warning_message": "",
+            "warning_items": [],
+            "has_sheet_url": bool(ev.google_sheet_url),
+        },
+        stylesheets=("css/admin.css",),
+        script_srcs=(HTMX_SCRIPT_URL,),
+        body_class="admin-page",
     )
-
-    preview_trigger = Div(
-        Button(
-            "Load Preview",
-            type="button",
-            cls="btn btn-secondary",
-            hx_get=f"/admin/events/{event_id}/import/preview",
-            hx_include="#sheet_url",
-            hx_target="#preview-area",
-            hx_indicator="#preview-spinner",
-        ),
-        Span(" Loading…", id="preview-spinner", cls="htmx-indicator", style="color:#888;font-size:0.85rem;"),
-        style="margin-bottom:1rem;",
-    )
-
-    refresh_action = ""
-    if ev.google_sheet_url:
-        refresh_action = Div(
-            P(
-                "Already imported robots for this event? Refresh the roster from the saved event sheet URL.",
-                style="color:#888;font-size:0.9rem;margin:0 0 0.5rem;",
-            ),
-            _refresh_sheet_action(event_id, True),
-            style="margin-bottom:1rem;",
-        )
-
-    page = Div(
-        A("← Event", href=f"/admin/events/{event_id}", cls="btn btn-sm btn-secondary", style="margin-bottom:1.2rem;display:inline-block;"),
-        H1(f"Import Robots — {ev.event_name}"),
-        err_el if err_el else "",
-        Div(
-            P(
-                "Fetch robot registrations from your Google Sheet. "
-                "Select the rows to import and optionally mark any as reserves.",
-                style="color:#888;font-size:0.9rem;margin-bottom:1rem;",
-            ),
-            refresh_action,
-            sheet_url_field,
-            preview_trigger,
-            Div(id="preview-area"),
-            cls="card",
-        ),
-    )
-    return _page("Import Robots", page, user=user)
 
 
 @router.get("/events/{event_id}/import/preview", response_class=HTMLResponse)
@@ -870,40 +598,73 @@ def import_preview(
     sheet_url: str = Query(default=""),
 ):
     """HTMX endpoint — returns the preview table fragment for the import page."""
-    ev = _get_event_or_404(event_id, user.id, db)
+    _get_event_or_404(event_id, user.id, db)
+
+    preview_context = {
+        "event_id": event_id,
+        "sheet_url": sheet_url,
+        "preview_rows": [],
+        "registration_count": 0,
+        "message_kind": "",
+        "message_text": "",
+    }
 
     if not sheet_url:
-        return HTMLResponse(to_xml(Div(
-            P("Please enter a Google Sheet URL above.", cls="alert alert-error"),
-        )))
+        preview_context["message_kind"] = "error"
+        preview_context["message_text"] = "Please enter a Google Sheet URL above."
+        return render_template(
+            request,
+            "admin/partials/import_preview.html",
+            title="Import Preview",
+            context=preview_context,
+        )
 
     try:
         access_token = get_valid_access_token(user, db)
         rows = fetch_sheet_rows(sheet_url, access_token)
     except ValueError as exc:
-        return HTMLResponse(to_xml(Div(
-            P(f"Error: {exc}", cls="alert alert-error"),
-        )))
+        preview_context["message_kind"] = "error"
+        preview_context["message_text"] = f"Error: {exc}"
+        return render_template(
+            request,
+            "admin/partials/import_preview.html",
+            title="Import Preview",
+            context=preview_context,
+        )
     except Exception as exc:
-        return HTMLResponse(to_xml(Div(
-            P(f"Could not fetch sheet: {exc}", cls="alert alert-error"),
-        )))
+        preview_context["message_kind"] = "error"
+        preview_context["message_text"] = f"Could not fetch sheet: {exc}"
+        return render_template(
+            request,
+            "admin/partials/import_preview.html",
+            title="Import Preview",
+            context=preview_context,
+        )
 
     if not rows:
-        return HTMLResponse(to_xml(Div(
-            P("Sheet is empty or has no data rows.", cls="alert alert-info"),
-        )))
+        preview_context["message_kind"] = "info"
+        preview_context["message_text"] = "Sheet is empty or has no data rows."
+        return render_template(
+            request,
+            "admin/partials/import_preview.html",
+            title="Import Preview",
+            context=preview_context,
+        )
 
     _, registrations = load_registrations(rows, sheet_url)
 
     if not registrations:
-        return HTMLResponse(to_xml(Div(
-            P(
-                "No valid robot registrations found. "
-                "The sheet must have 'Roboteer Name' and 'Robot Name' columns.",
-                cls="alert alert-info",
-            ),
-        )))
+        preview_context["message_kind"] = "info"
+        preview_context["message_text"] = (
+            "No valid robot registrations found. The sheet must have 'Roboteer Name' "
+            "and 'Robot Name' columns."
+        )
+        return render_template(
+            request,
+            "admin/partials/import_preview.html",
+            title="Import Preview",
+            context=preview_context,
+        )
 
     # Determine which sheet_row_ids already exist in the DB
     existing_row_ids = {
@@ -925,64 +686,41 @@ def import_preview(
         in_event = row_id in event_robot_sheet_ids
 
         if in_event:
-            status_el = Span("already in event", cls="preview-status-dup")
+            status_text = "already in event"
+            status_class = "preview-status-dup"
         elif row_id in existing_row_ids:
-            status_el = Span("robot exists (will link)", cls="preview-status-dup")
+            status_text = "robot exists (will link)"
+            status_class = "preview-status-dup"
         else:
-            status_el = Span("new", cls="preview-status-new")
+            status_text = "new"
+            status_class = "preview-status-new"
 
-        table_rows.append(Tr(
-            Td(
-                Input(
-                    type="checkbox",
-                    name="row_ids",
-                    value=row_id,
-                    checked=not in_event,
-                    **({"disabled": True} if in_event else {}),
-                ),
-            ),
-            Td(Input(type="checkbox", name="reserve_ids", value=row_id)),
-            Td(reg["roboteer_name"]),
-            Td(reg["robot_name"]),
-            Td(reg.get("weapon_type") or "—"),
-            Td(
-                reg.get("image_url") or "—",
-                style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;",
-            ),
-            Td(status_el),
-        ))
+        table_rows.append(
+            {
+                "row_id": row_id,
+                "roboteer_name": reg["roboteer_name"],
+                "robot_name": reg["robot_name"],
+                "weapon_type": reg.get("weapon_type") or "—",
+                "image_url": reg.get("image_url") or "—",
+                "status_text": status_text,
+                "status_class": status_class,
+                "import_checked": not in_event,
+                "import_disabled": in_event,
+            }
+        )
 
-    fragment = HForm(
-        P(
-            f"{len(registrations)} registrations found. "
-            "Check rows to import; tick 'Reserve' to designate as a reserve robot.",
-            style="color:#888;font-size:0.85rem;margin-bottom:0.75rem;",
-        ),
-        Input(type="hidden", name="sheet_url", value=sheet_url),
-        Div(
-            Table(
-                Thead(Tr(
-                    Th("Import"),
-                    Th("Reserve"),
-                    Th("Roboteer"),
-                    Th("Robot"),
-                    Th("Weapon"),
-                    Th("Image URL"),
-                    Th("Status"),
-                )),
-                Tbody(*table_rows),
-            ),
-            cls="table-wrap",
-            style="margin-bottom:1rem;",
-        ),
-        Div(
-            Button("Import Selected", type="submit", cls="btn btn-primary"),
-            style="margin-top:0.5rem;",
-        ),
-        method="post",
-        action=f"/admin/events/{event_id}/import",
+    preview_context.update(
+        {
+            "preview_rows": table_rows,
+            "registration_count": len(registrations),
+        }
     )
-    return HTMLResponse(to_xml(fragment))
+    return render_template(
+        request,
+        "admin/partials/import_preview.html",
+        title="Import Preview",
+        context=preview_context,
+    )
 
 
 @router.post("/events/{event_id}/import")
@@ -1144,59 +882,23 @@ def add_robot_form(
     error: str = Query(default=""),
 ):
     ev = _get_event_or_404(event_id, user.id, db)
-    err_el = Div(error, cls="alert alert-error") if error else ""
-
-    form = Div(
-        A("← Event", href=f"/admin/events/{event_id}", cls="btn btn-sm btn-secondary", style="margin-bottom:1.2rem;display:inline-block;"),
-        H1("Add Robot Manually"),
-        err_el if err_el else "",
-        Div(
-            HForm(
-                Div(
-                    Label("Roboteer Name", for_="roboteer_name"),
-                    Input(type="text", id="roboteer_name", name="roboteer_name",
-                          cls="form-control", required=True, autofocus=True),
-                    cls="form-group",
-                ),
-                Div(
-                    Label("Robot Name", for_="robot_name"),
-                    Input(type="text", id="robot_name", name="robot_name",
-                          cls="form-control", required=True),
-                    cls="form-group",
-                ),
-                Div(
-                    Label("Weapon Type (optional)", for_="weapon_type"),
-                    Input(type="text", id="weapon_type", name="weapon_type",
-                          cls="form-control", placeholder="e.g. Spinner, Wedge…"),
-                    cls="form-group",
-                ),
-                Div(
-                    Label("Contact Email (optional)", for_="contact_email"),
-                    Input(type="email", id="contact_email", name="contact_email",
-                          cls="form-control"),
-                    cls="form-group",
-                ),
-                Div(
-                    Label(
-                        Input(type="checkbox", name="is_reserve", value="1"),
-                        " Designate as reserve",
-                        style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;",
-                    ),
-                    cls="form-group",
-                ),
-                Div(
-                    Button("Add to Roster", type="submit", cls="btn btn-primary"),
-                    " ",
-                    A("Cancel", href=f"/admin/events/{event_id}", cls="btn btn-secondary"),
-                    cls="form-group",
-                ),
-                method="post",
-                action=f"/admin/events/{event_id}/robots/add",
-            ),
-            cls="card",
-        ),
+    return render_template(
+        request,
+        "admin/events/add_robot.html",
+        title="Add Robot",
+        context={
+            "user": user,
+            "event": ev,
+            "error_message": error,
+            "success_message": "",
+            "info_message": "",
+            "warning_message": "",
+            "warning_items": [],
+        },
+        stylesheets=("css/admin.css",),
+        script_srcs=(HTMX_SCRIPT_URL,),
+        body_class="admin-page",
     )
-    return _page("Add Robot", form, user=user)
 
 
 @router.post("/events/{event_id}/robots/add")
@@ -1369,80 +1071,41 @@ def retire_form(
     phases = ordered_event_phases(event_id, db)
     reserves = reserve_event_robots(event_id, db)
 
-    err_el = Div(error, cls="alert alert-error") if error else ""
-
+    info_message = ""
     if not phases:
-        info = Div(
+        info_message = (
             "Retirement can only be recorded once qualifying phases have been created (Phase 5). "
-            "You can still remove robots from the roster using the Remove button.",
-            cls="alert alert-info",
+            "You can still remove robots from the roster using the Remove button."
         )
-        page = Div(
-            A("← Event", href=f"/admin/events/{event_id}", cls="btn btn-sm btn-secondary", style="margin-bottom:1.2rem;display:inline-block;"),
-            H1(f"Retire {robot.robot_name}"),
-            info,
-        )
-        return _page("Retire Robot", page, user=user)
 
-    phase_options = [
-        Option(f"Phase {ph.phase_number} ({ph.phase_type.value})", value=str(ph.id))
-        for ph in phases
-    ]
-    reserve_options = (
-        [
-            Option(f"{r.robot.robot_name} (#{i + 1})", value=str(r.id))
-            for i, r in enumerate(reserves)
-        ]
-        if reserves
-        else [Option("No reserves available", value="")]
+    return render_template(
+        request,
+        "admin/events/retire.html",
+        title="Retire Robot",
+        context={
+            "user": user,
+            "event": ev,
+            "robot": robot,
+            "entry_id": er_id,
+            "error_message": error,
+            "success_message": "",
+            "info_message": info_message,
+            "warning_message": "",
+            "warning_items": [],
+            "show_form": bool(phases),
+            "phase_options": [
+                {"id": ph.id, "label": f"Phase {ph.phase_number} ({ph.phase_type.value})"}
+                for ph in phases
+            ],
+            "reserve_options": [
+                {"id": r.id, "label": f"{r.robot.robot_name} (#{i + 1})"}
+                for i, r in enumerate(reserves)
+            ],
+        },
+        stylesheets=("css/admin.css",),
+        script_srcs=(HTMX_SCRIPT_URL,),
+        body_class="admin-page",
     )
-
-    page = Div(
-        A("← Event", href=f"/admin/events/{event_id}", cls="btn btn-sm btn-secondary", style="margin-bottom:1.2rem;display:inline-block;"),
-        H1(f"Retire {robot.robot_name}"),
-        err_el if err_el else "",
-        Div(
-            P(
-                "Retiring a robot removes it from the active roster from the selected phase onward. "
-                "Its results are preserved. The next available reserve will be swapped in.",
-                style="color:#888;font-size:0.9rem;margin-bottom:1rem;",
-            ),
-            HForm(
-                Div(
-                    Label("Retired after which phase?", for_="phase_id"),
-                    Select(
-                        *phase_options,
-                        id="phase_id",
-                        name="phase_id",
-                        cls="form-control",
-                        required=True,
-                    ),
-                    cls="form-group",
-                ),
-                Div(
-                    Label("Replace with reserve (optional)", for_="reserve_er_id"),
-                    Select(
-                        Option("— No replacement —", value=""),
-                        *reserve_options,
-                        id="reserve_er_id",
-                        name="reserve_er_id",
-                        cls="form-control",
-                    ),
-                    cls="form-group",
-                ),
-                Div(
-                    Button("Confirm Retirement", type="submit", cls="btn btn-warning"),
-                    " ",
-                    A("Cancel", href=f"/admin/events/{event_id}", cls="btn btn-secondary"),
-                    cls="form-group",
-                ),
-                method="post",
-                action=f"/admin/events/{event_id}/robots/{er_id}/retire",
-            ),
-            cls="card",
-        ),
-    )
-    return _page("Retire Robot", page, user=user)
 
 
 @router.post("/events/{event_id}/robots/{er_id}/retire")
@@ -1510,55 +1173,26 @@ def upload_image_form(
     robot = db.query(Robot).filter(Robot.id == robot_id).first()
     if not robot:
         return RedirectResponse(f"/admin/events/{event_id}", status_code=303)
-
-    err_el = Div(error, cls="alert alert-error") if error else ""
-    current_img = ""
-    if robot.image_url:
-        current_img = Div(
-            P("Current image:", style="color:#888;font-size:0.85rem;margin-bottom:0.5rem;"),
-            Img(src=robot.image_url, style="max-width:200px;max-height:150px;border-radius:6px;"),
-            style="margin-bottom:1rem;",
-        )
-
-    page = Div(
-        A("← Event", href=f"/admin/events/{event_id}", cls="btn btn-sm btn-secondary", style="margin-bottom:1.2rem;display:inline-block;"),
-        H1(f"Upload Image — {robot.robot_name}"),
-        err_el if err_el else "",
-        Div(
-            current_img,
-            HForm(
-                Div(
-                    Label("Upload image file", for_="image_file"),
-                    Input(type="file", id="image_file", name="image_file",
-                          cls="form-control", accept="image/*"),
-                    cls="form-group",
-                ),
-                Div(
-                    Label("Or paste image URL", for_="image_url"),
-                    Input(
-                        type="url",
-                        id="image_url",
-                        name="image_url",
-                        cls="form-control",
-                        placeholder="https://example.com/robot.jpg",
-                        value=(robot.image_url if robot.image_source == ImageSource.sheet else ""),
-                    ),
-                    cls="form-group",
-                ),
-                Div(
-                    Button("Save Image", type="submit", cls="btn btn-primary"),
-                    " ",
-                    A("Cancel", href=f"/admin/events/{event_id}", cls="btn btn-secondary"),
-                    cls="form-group",
-                ),
-                method="post",
-                action=f"/admin/events/{event_id}/robots/{robot_id}/upload-image",
-                enctype="multipart/form-data",
-            ),
-            cls="card",
-        ),
+    return render_template(
+        request,
+        "admin/events/upload_image.html",
+        title="Upload Image",
+        context={
+            "user": user,
+            "event": ev,
+            "robot": robot,
+            "error_message": error,
+            "success_message": "",
+            "info_message": "",
+            "warning_message": "",
+            "warning_items": [],
+            "current_image_url": robot.image_url or "",
+            "default_image_url": robot.image_url if robot.image_source == ImageSource.sheet else "",
+        },
+        stylesheets=("css/admin.css",),
+        script_srcs=(HTMX_SCRIPT_URL,),
+        body_class="admin-page",
     )
-    return _page("Upload Image", page, user=user)
 
 
 @router.post("/events/{event_id}/robots/{robot_id}/upload-image")
@@ -1869,10 +1503,7 @@ def phase_detail(
         "score_cleared": ("Fight result cleared.", "info"),
         "round_complete": ("Round marked complete.", "success"),
     }
-    flash = ""
-    if msg in flash_map:
-        text, kind = flash_map[msg]
-        flash = Div(text, cls=f"alert alert-{kind}")
+    flash_context = _flash_context(msg, flash_map, fallback_error="Unable to complete that action.")
 
     matchups = (
         db.query(Matchup)
@@ -1884,142 +1515,28 @@ def phase_detail(
     all_done = all(m.status == MatchupStatus.completed for m in matchups)
     can_complete = all_done and phase.status == PhaseStatus.active
 
-    # Action buttons
-    top_actions = [
-        A(
-            f"← {ev.event_name}",
-            href=f"/admin/events/{event_id}",
-            cls="btn btn-sm btn-secondary",
-            style="margin-bottom:1.2rem;display:inline-block;",
-        ),
-    ]
-
-    # Matchup list
-    items = []
-    for m in matchups:
-        r1: Robot = m.robot1
-        r2: Robot | None = m.robot2
-
-        if r2 is None:
-            robot_label = Span(
-                Strong(r1.robot_name),
-                Span(" — BYE", style="color:#555;font-size:0.82rem;"),
-                cls="matchup-robots",
-            )
-            result_el = Span(f"+{BYE_POINTS} pts (bye)", cls="matchup-result-label")
-            item_cls = "matchup-item is-bye"
-        else:
-            robot_label = Span(
-                Strong(r1.robot_name),
-                Span(" vs ", cls="matchup-vs"),
-                Strong(r2.robot_name),
-                cls="matchup-robots",
-            )
-            if m.status == MatchupStatus.completed:
-                r1_res = next((r for r in m.results if r.robot_id == r1.id), None)
-                r2_res = next((r for r in m.results if r.robot_id == r2.id), None)
-                r1_pts = r1_res.points_scored if r1_res else 0
-                r2_pts = r2_res.points_scored if r2_res else 0
-                result_el = Span(
-                    points_to_outcome_label(r1_pts, r2_pts),
-                    f" ({r1_pts}–{r2_pts})",
-                    cls="matchup-result-label",
-                )
-            else:
-                result_el = Span("pending", cls="matchup-result-pending")
-            item_cls = "matchup-item"
-
-        score_btn = ""
-        if r2 is not None:
-            if m.status == MatchupStatus.pending and phase.status == PhaseStatus.active:
-                score_btn = A(
-                    "Score",
-                    href=f"/admin/events/{event_id}/matchups/{m.id}/score",
-                    cls="btn btn-sm btn-primary",
-                )
-            elif m.status == MatchupStatus.completed:
-                score_btn = A(
-                    "Edit",
-                    href=f"/admin/events/{event_id}/matchups/{m.id}/score",
-                    cls="btn btn-sm btn-secondary",
-                )
-        else:
-            # Bye matchup — can complete directly
-            if m.status == MatchupStatus.pending and phase.status == PhaseStatus.active:
-                score_btn = HForm(
-                    Button("Complete Bye", type="submit", cls="btn btn-sm btn-success"),
-                    method="post",
-                    action=f"/admin/events/{event_id}/matchups/{m.id}/complete-bye",
-                )
-
-        drag = Span("⠿", cls="drag-handle", title="Drag to reorder") if phase.status == PhaseStatus.active else ""
-
-        items.append(
-            Li(
-                drag,
-                robot_label,
-                result_el,
-                score_btn,
-                cls=item_cls,
-                data_matchup_id=str(m.id),
-            )
-        )
-
-    matchup_list = Ul(*items, id="matchup-list", cls="matchup-list")
-
-    # SortableJS script
-    sort_script = ""
-    if phase.status == PhaseStatus.active:
-        sort_script = Script(
-            src=_SORTABLEJS,
-        )
-        sort_init = Script(
-            f"""
-document.addEventListener('DOMContentLoaded', function() {{
-    var el = document.getElementById('matchup-list');
-    if (!el) return;
-    Sortable.create(el, {{
-        animation: 150,
-        handle: '.drag-handle',
-        onEnd: function() {{
-            var order = Array.from(el.querySelectorAll('.matchup-item'))
-                            .map(function(e) {{ return e.dataset.matchupId; }});
-            fetch('/admin/events/{event_id}/phases/{phase_id}/reorder', {{
-                method: 'POST',
-                headers: {{'Content-Type': 'application/json'}},
-                body: JSON.stringify({{order: order}})
-            }});
-        }}
-    }});
-}});
-"""
-        )
-    else:
-        sort_init = ""
-
-    complete_btn = ""
-    if can_complete:
-        complete_btn = HForm(
-            Button("Mark Round Complete", type="submit", cls="btn btn-success"),
-            method="post",
-            action=f"/admin/events/{event_id}/phases/{phase_id}/complete",
-        )
-
-    page = Div(
-        *top_actions,
-        H1(phase_label),
-        Small(
-            Span(phase.status.value, cls=f"badge badge-{phase.status.value}"),
-            f"  ·  {sum(1 for m in matchups if m.status == MatchupStatus.completed)}/{len(matchups)} complete",
-            style="color:#888;display:block;margin-bottom:1.2rem;",
-        ),
-        flash if flash else "",
-        Div(matchup_list, cls="card"),
-        complete_btn,
-        sort_script,
-        sort_init,
+    return render_template(
+        request,
+        "admin/phases/detail.html",
+        title=phase_label,
+        context={
+            "user": user,
+            "event": ev,
+            "phase": phase,
+            "phase_label": phase_label,
+            "matchups": [_phase_matchup_context(matchup, event_id, phase) for matchup in matchups],
+            "can_complete": can_complete,
+            "complete_action": f"/admin/events/{event_id}/phases/{phase_id}/complete",
+            "completed_count": sum(1 for matchup in matchups if matchup.status == MatchupStatus.completed),
+            "total_count": len(matchups),
+            "reorder_enabled": phase.status == PhaseStatus.active,
+            "reorder_url": f"/admin/events/{event_id}/phases/{phase_id}/reorder",
+            **flash_context,
+        },
+        stylesheets=("css/admin.css",),
+        script_srcs=((HTMX_SCRIPT_URL, _SORTABLEJS) if phase.status == PhaseStatus.active else (HTMX_SCRIPT_URL,)),
+        body_class="admin-page",
     )
-    return _page(phase_label, page, user=user)
 
 
 @router.post("/events/{event_id}/phases/{phase_id}/reorder")
@@ -2142,73 +1659,44 @@ def score_form(
         back_href = f"/admin/events/{event_id}/bracket"
         phase_label = f"Bracket Round {m.bracket_round or ''}"
 
-    err_el = Div(error, cls="alert alert-error") if error else ""
-
-    # Existing result (for edit mode)
-    existing_outcome = ""
-    if m.status == MatchupStatus.completed:
-        r1_res = next((r for r in m.results if r.robot_id == r1.id), None)
-        r2_res = next((r for r in m.results if r2 and r.robot_id == r2.id), None)
-        r1_pts = r1_res.points_scored if r1_res else 0
-        r2_pts = r2_res.points_scored if r2_res else 0
-        existing_outcome = Div(
-            P(
-                f"Current result: {points_to_outcome_label(r1_pts, r2_pts)} ({r1_pts}–{r2_pts})",
-                style="color:#4ade80;font-size:0.9rem;margin-bottom:0.75rem;",
-            ),
-            HForm(
-                Button("Clear result", type="submit", cls="btn btn-danger btn-sm"),
-                method="post",
-                action=f"/admin/events/{event_id}/matchups/{matchup_id}/clear-score",
-            ),
-            style="margin-bottom:1rem;padding-bottom:1rem;border-bottom:1px solid #2a2a2a;",
-        )
-
-    # Build outcome options labelled with robot names
-    options = []
-    for code, label in FIGHT_OUTCOMES:
-        display = (
-            label
-            .replace("Robot 1", r1.robot_name)
-            .replace("Robot 2", r2.robot_name if r2 else "Robot 2")
-        )
-        options.append(Option(display, value=code))
-
     form_title = f"{'Edit' if m.status == MatchupStatus.completed else 'Score'} Fight"
 
-    page = Div(
-        A(f"← {phase_label}", href=back_href, cls="btn btn-sm btn-secondary",
-          style="margin-bottom:1.2rem;display:inline-block;"),
-        H1(form_title),
-        err_el if err_el else "",
-        Div(
-            P(
-                Span(r1.robot_name, style="font-weight:700;"),
-                Span(" vs ", style="color:#555;"),
-                Span(r2.robot_name if r2 else "BYE", style="font-weight:700;" if r2 else "color:#555;"),
-                Span(f" · {phase_label}", style="color:#666;font-size:0.85rem;"),
-                style="margin-bottom:1rem;font-size:1rem;",
-            ),
-            existing_outcome,
-            HForm(
-                Div(
-                    Label("Fight outcome", for_="outcome"),
-                    Select(*options, id="outcome", name="outcome", cls="form-control", required=True),
-                    cls="form-group",
-                ),
-                Div(
-                    Button("Save Result", type="submit", cls="btn btn-primary"),
-                    " ",
-                    A("Cancel", href=back_href, cls="btn btn-secondary"),
-                    cls="form-group",
-                ),
-                method="post",
-                action=f"/admin/events/{event_id}/matchups/{matchup_id}/score",
-            ),
-            cls="card",
-        ),
+    existing_result = None
+    if m.status == MatchupStatus.completed:
+        r1_pts = _points_for_matchup_robot(m, r1.id) or 0
+        r2_pts = _points_for_matchup_robot(m, r2.id if r2 else None) or 0
+        existing_result = {
+            "label": points_to_outcome_label(r1_pts, r2_pts),
+            "score": f"{r1_pts}-{r2_pts}",
+        }
+
+    return render_template(
+        request,
+        "admin/phases/score.html",
+        title=form_title,
+        context={
+            "user": user,
+            "event": ev,
+            "phase_label": phase_label,
+            "back_href": back_href,
+            "form_title": form_title,
+            "matchup": {
+                "id": m.id,
+                "robot1_name": r1.robot_name,
+                "robot2_name": r2.robot_name if r2 else "BYE",
+            },
+            "existing_result": existing_result,
+            "clear_action": f"/admin/events/{event_id}/matchups/{matchup_id}/clear-score",
+            "save_action": f"/admin/events/{event_id}/matchups/{matchup_id}/score",
+            "outcome_options": _score_option_context(m),
+            "error_message": error,
+            "success_message": "",
+            "info_message": "",
+        },
+        stylesheets=("css/admin.css",),
+        script_srcs=(HTMX_SCRIPT_URL,),
+        body_class="admin-page",
     )
-    return _page(form_title, page, user=user)
 
 
 @router.post("/events/{event_id}/matchups/{matchup_id}/score")
@@ -2357,69 +1845,6 @@ def _bracket_round_label(rnd: int, total_rounds: int) -> str:
     # If fewer than 4 rounds, shift labels (e.g. 3 rounds → SF, F)
     offset = 4 - total_rounds
     return _BRACKET_ROUND_LABELS.get(rnd + offset, f"Round {rnd}")
-
-
-def _admin_bracket_matchup(m: Matchup, event_id: int, show_actions: bool) -> Div:
-    r1: Robot = m.robot1
-    r2: Robot | None = m.robot2
-
-    r1_pts = r2_pts = None
-    r1_win = r2_win = False
-    if m.status == MatchupStatus.completed:
-        r1_res = next((r for r in m.results if r.robot_id == r1.id), None)
-        r2_res = next((r for r in m.results if r2 and r.robot_id == r2.id), None)
-        r1_pts = r1_res.points_scored if r1_res else 0
-        r2_pts = r2_res.points_scored if r2_res else 0
-        if r2_pts is not None:
-            r1_win = r1_pts >= r2_pts
-            r2_win = r2_pts > r1_pts
-        else:
-            r1_win = True
-
-    def robot_row(robot: Robot | None, pts: int | None, is_win: bool) -> Div:
-        if robot is None:
-            return Div(Span("TBD", style="color:#555;font-style:italic;"), cls="bracket-robot-row")
-        cls_ = "bracket-robot-row bracket-robot-winner" if is_win else "bracket-robot-row"
-        pts_el = (
-            Span(str(pts), style="margin-left:auto;color:#4ade80;font-weight:700;")
-            if is_win and pts is not None
-            else (
-                Span(str(pts), style="margin-left:auto;color:#f87171;")
-                if pts is not None
-                else Span("—", style="margin-left:auto;color:#444;")
-            )
-        )
-        return Div(
-            A(robot.robot_name, href=f"/events/{event_id}/robot/{robot.id}"),
-            pts_el,
-            cls=cls_,
-        )
-
-    action_el = ""
-    if show_actions:
-        if m.status == MatchupStatus.pending:
-            action_el = Div(
-                A("Score", href=f"/admin/events/{event_id}/matchups/{m.id}/score", cls="btn btn-sm btn-primary"),
-                style="padding:0.5rem 0.5rem;align-self:center;",
-            )
-        else:
-            action_el = Div(
-                A("Edit", href=f"/admin/events/{event_id}/matchups/{m.id}/score", cls="btn btn-sm btn-secondary"),
-                style="padding:0.5rem 0.5rem;align-self:center;",
-            )
-
-    return Div(
-        Div(
-            robot_row(r1, r1_pts, r1_win),
-            Div(style="border-top:1px solid #222;margin:0 0.5rem;"),
-            robot_row(r2, r2_pts, r2_win),
-            cls="bracket-matchup-robots",
-        ),
-        action_el,
-        cls="bracket-matchup",
-    )
-
-
 @router.get("/events/{event_id}/bracket", response_class=HTMLResponse)
 def bracket_admin(
     event_id: int,
@@ -2437,10 +1862,7 @@ def bracket_admin(
         "bracket_advanced": ("Next bracket round generated.", "success"),
         "bracket_swapped": ("Bracket pairings swapped.", "success"),
     }
-    flash = ""
-    if msg in flash_map:
-        t, k = flash_map[msg]
-        flash = Div(t, cls=f"alert alert-{k}")
+    flash_context = _flash_context(msg, flash_map, fallback_error="Unable to complete that action.")
 
     bracket_phase = (
         db.query(Phase)
@@ -2449,13 +1871,25 @@ def bracket_admin(
     )
 
     if not bracket_phase:
-        page = Div(
-            A("← Event", href=f"/admin/events/{event_id}", cls="btn btn-sm btn-secondary",
-              style="margin-bottom:1.2rem;display:inline-block;"),
-            H1("Bracket"),
-            Div(P("No bracket yet. Generate it from the event page.", cls="empty"), cls="card"),
+        return render_template(
+            request,
+            "admin/phases/bracket.html",
+            title="Bracket",
+            context={
+                "user": user,
+                "event": ev,
+                "bracket_phase": None,
+                "rounds": [],
+                "show_rearrange": False,
+                "rearrange_href": "",
+                "can_advance": False,
+                "advance_action": "",
+                **flash_context,
+            },
+            stylesheets=("css/admin.css",),
+            script_srcs=(HTMX_SCRIPT_URL,),
+            body_class="admin-page",
         )
-        return _page("Bracket", page, user=user)
 
     all_matchups = (
         db.query(Matchup)
@@ -2464,7 +1898,6 @@ def bracket_admin(
         .all()
     )
 
-    # Group by bracket_round
     rounds: dict[int, list[Matchup]] = {}
     for m in all_matchups:
         rnd = m.bracket_round or 1
@@ -2473,71 +1906,42 @@ def bracket_admin(
     max_round = max(rounds.keys(), default=0)
     total_rounds = max_round  # will grow as bracket advances
 
-    # Determine if current round is all done → show advance button
-    advance_btn = ""
+    can_advance = False
     if max_round > 0:
         current_round_done = all(
             m.status == MatchupStatus.completed for m in rounds.get(max_round, [])
         )
         current_round_has_multiple = len(rounds.get(max_round, [])) > 1
-        if current_round_done and current_round_has_multiple:
-            advance_btn = HForm(
-                Button("Generate Next Round →", type="submit", cls="btn btn-warning"),
-                method="post",
-                action=f"/admin/events/{event_id}/bracket/advance",
-            )
+        can_advance = current_round_done and current_round_has_multiple
 
-    # Swap pairings UI (only for round 1 if all pending)
-    swap_section = ""
     round1_matchups = rounds.get(1, [])
-    if round1_matchups and all(m.status == MatchupStatus.pending for m in round1_matchups):
-        swap_section = Div(
-            Div(
-                H3("Rearrange Round 1 Pairings"),
-                A("Rearrange", href=f"/admin/events/{event_id}/bracket/rearrange",
-                  cls="btn btn-sm btn-secondary"),
-                cls="card-header",
+    return render_template(
+        request,
+        "admin/phases/bracket.html",
+        title="Bracket",
+        context={
+            "user": user,
+            "event": ev,
+            "bracket_phase": bracket_phase,
+            "rounds": [
+                {
+                    "label": _bracket_round_label(rnd, max_round),
+                    "matchups": [_bracket_matchup_context(matchup, event_id) for matchup in rounds[rnd]],
+                }
+                for rnd in sorted(rounds.keys())
+            ],
+            "show_rearrange": bool(round1_matchups) and all(
+                matchup.status == MatchupStatus.pending for matchup in round1_matchups
             ),
-            P("Swap robot pairings before any fights begin.", style="color:#888;font-size:0.85rem;"),
-            cls="card",
-        )
-
-    # Build bracket sections
-    sections = []
-    for rnd in sorted(rounds.keys()):
-        # Recalculate total_rounds as we know the final size
-        round_label = _bracket_round_label(rnd, max_round)
-        sections.append(P(round_label, cls="bracket-round-header"))
-        for m in rounds[rnd]:
-            sections.append(_admin_bracket_matchup(m, event_id, show_actions=True))
-
-    standing_link = A(
-        "← Event",
-        href=f"/admin/events/{event_id}",
-        cls="btn btn-sm btn-secondary",
-        style="margin-bottom:1.2rem;display:inline-block;",
+            "rearrange_href": f"/admin/events/{event_id}/bracket/rearrange",
+            "can_advance": can_advance,
+            "advance_action": f"/admin/events/{event_id}/bracket/advance",
+            **flash_context,
+        },
+        stylesheets=("css/admin.css",),
+        script_srcs=(HTMX_SCRIPT_URL,),
+        body_class="admin-page",
     )
-    standings_link = A(
-        "Qualifying standings",
-        href=f"/admin/events/{event_id}/qualifying/standings",
-        cls="btn btn-sm btn-secondary",
-        style="margin-bottom:1.2rem;margin-left:0.5rem;display:inline-block;",
-    )
-
-    page = Div(
-        standing_link,
-        standings_link,
-        H1("Bracket"),
-        Small(
-            Span(bracket_phase.status.value, cls=f"badge badge-{bracket_phase.status.value}"),
-            style="display:block;color:#888;margin-bottom:1.2rem;",
-        ),
-        flash if flash else "",
-        swap_section,
-        Div(*sections, cls="card") if sections else Div(P("No matchups yet.", cls="empty"), cls="card"),
-        advance_btn,
-    )
-    return _page("Bracket", page, user=user)
 
 
 @router.post("/events/{event_id}/bracket/advance")
@@ -2611,52 +2015,32 @@ def bracket_rearrange_form(
     if not r1_matchups:
         return RedirectResponse(f"/admin/events/{event_id}/bracket", status_code=303)
 
-    err_el = Div(error, cls="alert alert-error") if error else ""
-
     matchup_options = [
-        Option(
-            f"Match {i + 1}: {m.robot1.robot_name} vs {m.robot2.robot_name if m.robot2 else 'BYE'}",
-            value=str(m.id),
-        )
+        {
+            "value": str(m.id),
+            "label": f"Match {i + 1}: {m.robot1.robot_name} vs {m.robot2.robot_name if m.robot2 else 'BYE'}",
+        }
         for i, m in enumerate(r1_matchups)
         if m.robot2_id is not None
     ]
 
-    page = Div(
-        A("← Bracket", href=f"/admin/events/{event_id}/bracket", cls="btn btn-sm btn-secondary",
-          style="margin-bottom:1.2rem;display:inline-block;"),
-        H1("Rearrange Round 1"),
-        err_el if err_el else "",
-        Div(
-            P(
-                "Select two matchups to swap their lower-seeded robot (robot 2). "
-                "This lets you adjust the bracket draw before fights begin.",
-                style="color:#888;font-size:0.88rem;margin-bottom:1rem;",
-            ),
-            HForm(
-                Div(
-                    Label("Matchup A", for_="matchup_a"),
-                    Select(*matchup_options, id="matchup_a", name="matchup_a", cls="form-control", required=True),
-                    cls="form-group",
-                ),
-                Div(
-                    Label("Matchup B", for_="matchup_b"),
-                    Select(*matchup_options, id="matchup_b", name="matchup_b", cls="form-control", required=True),
-                    cls="form-group",
-                ),
-                Div(
-                    Button("Swap Robot 2s", type="submit", cls="btn btn-primary"),
-                    " ",
-                    A("Cancel", href=f"/admin/events/{event_id}/bracket", cls="btn btn-secondary"),
-                    cls="form-group",
-                ),
-                method="post",
-                action=f"/admin/events/{event_id}/bracket/rearrange",
-            ),
-            cls="card",
-        ),
+    return render_template(
+        request,
+        "admin/phases/bracket_rearrange.html",
+        title="Rearrange Bracket",
+        context={
+            "user": user,
+            "event": ev,
+            "matchup_options": matchup_options,
+            "submit_action": f"/admin/events/{event_id}/bracket/rearrange",
+            "error_message": error,
+            "success_message": "",
+            "info_message": "",
+        },
+        stylesheets=("css/admin.css",),
+        script_srcs=(HTMX_SCRIPT_URL,),
+        body_class="admin-page",
     )
-    return _page("Rearrange Bracket", page, user=user)
 
 
 @router.post("/events/{event_id}/bracket/rearrange")
@@ -2716,23 +2100,17 @@ def qualifying_standings_view(
         if not robot:
             continue
         qualifying = i <= 16
-        rows.append(Tr(
-            Td(
-                Span(str(i), style="color:#fbbf24;font-weight:700;" if i <= 3 else ""),
-            ),
-            Td(
-                Img(src=robot.image_url, cls="robot-thumb", alt=robot.robot_name)
-                if robot.image_url else "",
-            ),
-            Td(robot.robot_name),
-            Td(robot.roboteer.roboteer_name, style="color:#888;"),
-            Td(Span(str(pts), style="font-weight:700;color:#60a5fa;")),
-            Td(
-                Span("✓ Bracket", style="color:#4ade80;font-size:0.8rem;")
-                if qualifying
-                else Span("—", style="color:#555;font-size:0.8rem;"),
-            ),
-        ))
+        rows.append(
+            {
+                "rank": i,
+                "is_top_three": i <= 3,
+                "image_url": robot.image_url,
+                "robot_name": robot.robot_name,
+                "roboteer_name": robot.roboteer.roboteer_name,
+                "points": pts,
+                "qualifying": qualifying,
+            }
+        )
 
     bracket_phase = (
         db.query(Phase)
@@ -2740,6 +2118,7 @@ def qualifying_standings_view(
         .first()
     )
     generate_btn = ""
+    can_generate_bracket = False
     if not bracket_phase:
         qual_phases = (
             db.query(Phase)
@@ -2747,28 +2126,26 @@ def qualifying_standings_view(
             .all()
         )
         if len(qual_phases) >= 3 and all(ph.status == PhaseStatus.complete for ph in qual_phases):
-            generate_btn = HForm(
-                Button("Generate Bracket (Top 16)", type="submit", cls="btn btn-warning"),
-                method="post",
-                action=f"/admin/events/{event_id}/bracket/generate",
-                style="margin-bottom:1.5rem;",
-            )
+            can_generate_bracket = True
 
-    page = Div(
-        A("← Event", href=f"/admin/events/{event_id}", cls="btn btn-sm btn-secondary",
-          style="margin-bottom:1.2rem;display:inline-block;"),
-        H1("Qualifying Standings"),
-        Small(f"{ev.event_name} · {ev.weight_class}", style="color:#888;display:block;margin-bottom:1.2rem;"),
-        generate_btn,
-        Div(
-            Table(
-                Thead(Tr(Th("#"), Th(""), Th("Robot"), Th("Roboteer"), Th("Pts"), Th("Status"))),
-                Tbody(*rows) if rows else Tbody(Tr(Td("No results yet.", colspan="6"))),
-            ),
-            cls="table-wrap card",
-        ),
+    return render_template(
+        request,
+        "admin/phases/standings.html",
+        title="Qualifying Standings",
+        context={
+            "user": user,
+            "event": ev,
+            "rows": rows,
+            "can_generate_bracket": can_generate_bracket,
+            "generate_bracket_action": f"/admin/events/{event_id}/bracket/generate",
+            "error_message": "",
+            "success_message": "",
+            "info_message": "",
+        },
+        stylesheets=("css/admin.css",),
+        script_srcs=(HTMX_SCRIPT_URL,),
+        body_class="admin-page",
     )
-    return _page("Qualifying Standings", page, user=user)
 
 
 # ===========================================================================
@@ -2788,68 +2165,104 @@ def _se_round_label(rnd: int, total_rounds: int) -> str:
     return _SE_ROUND_LABELS.get(rnd + offset, f"Round {rnd}")
 
 
-def _sub_event_matchup_card(
+def _sub_event_matchup_context(
     m: SubEventMatchup,
     sub_event_id: int,
     event_id: int,
     show_actions: bool,
-) -> Div:
-    """Render a sub-event matchup (team vs team) as a compact card."""
-    t1: SubEventTeam | None = m.team1
-    t2: SubEventTeam | None = m.team2
+) -> dict[str, object]:
+    """Build template context for a sub-event team-vs-team matchup card."""
+    t1 = m.team1
+    t2 = m.team2
 
-    def _team_row(team: SubEventTeam | None, is_winner: bool) -> Div:
+    def _team_row(team: SubEventTeam | None, is_winner: bool) -> dict[str, object]:
         if team is None:
-            return Div(Span("TBD", style="color:#555;font-style:italic;"), cls="bracket-robot-row")
-        cls_ = "bracket-robot-row bracket-robot-winner" if is_winner else "bracket-robot-row"
-        label = Span(team.team_name, style="font-weight:600;")
-        robots_label = Span(
-            f" ({team.robot1.robot_name} & {team.robot2.robot_name})",
-            style="color:#666;font-size:0.8rem;",
-        )
-        win_badge = Span(" ✓", style="margin-left:auto;color:#4ade80;font-weight:700;") if is_winner else Span("", style="margin-left:auto;")
-        return Div(label, robots_label, win_badge, cls=cls_)
+            return {
+                "name": "TBD",
+                "robots": "",
+                "is_winner": False,
+                "is_tbd": True,
+            }
+
+        return {
+            "name": team.team_name,
+            "robots": f"{team.robot1.robot_name} & {team.robot2.robot_name}",
+            "is_winner": is_winner,
+            "is_tbd": False,
+        }
 
     t1_win = m.winner_team_id is not None and m.winner_team_id == (t1.id if t1 else None)
     t2_win = m.winner_team_id is not None and m.winner_team_id == (t2.id if t2 else None)
 
     is_bye = t2 is None
-    action_el = ""
+    action_href = ""
+    action_label = ""
+    action_class = ""
     if show_actions:
         if is_bye:
-            action_el = Div(
-                Span("BYE", style="color:#555;font-size:0.8rem;padding:0.5rem;"),
-                style="align-self:center;",
-            )
+            action_label = "BYE"
+            action_class = "admin-sub-event-bye"
         elif m.status == MatchupStatus.pending:
-            action_el = Div(
-                A(
-                    "Score",
-                    href=f"/admin/events/{event_id}/sub-events/{sub_event_id}/matchups/{m.id}/score",
-                    cls="btn btn-sm btn-primary",
-                ),
-                style="padding:0.5rem;align-self:center;",
-            )
+            action_href = f"/admin/events/{event_id}/sub-events/{sub_event_id}/matchups/{m.id}/score"
+            action_label = "Score"
+            action_class = "btn btn-sm btn-primary"
         else:
-            action_el = Div(
-                A(
-                    "Edit",
-                    href=f"/admin/events/{event_id}/sub-events/{sub_event_id}/matchups/{m.id}/score",
-                    cls="btn btn-sm btn-secondary",
-                ),
-                style="padding:0.5rem;align-self:center;",
-            )
+            action_href = f"/admin/events/{event_id}/sub-events/{sub_event_id}/matchups/{m.id}/score"
+            action_label = "Edit"
+            action_class = "btn btn-sm btn-secondary"
 
-    return Div(
-        Div(
-            _team_row(t1, t1_win),
-            Div(style="border-top:1px solid #222;margin:0 0.5rem;"),
-            _team_row(t2, t2_win),
-            cls="bracket-matchup-robots",
-        ),
-        action_el,
-        cls="bracket-matchup",
-    )
+    return {
+        "teams": [_team_row(t1, t1_win), _team_row(t2, t2_win)],
+        "action_href": action_href,
+        "action_label": action_label,
+        "action_class": action_class,
+        "is_bye": is_bye,
+    }
+
+
+def _run_order_row_context(ro: RunOrder, db: Session) -> dict[str, object] | None:
+    """Build template context for a unified run-order row."""
+    if ro.matchup_type == RunOrderMatchupType.main:
+        matchup = db.query(Matchup).filter(Matchup.id == ro.matchup_id).first()
+        if not matchup:
+            return None
+
+        phase = matchup.phase
+        if phase.phase_type == PhaseType.qualifying:
+            context_label = f"Q{phase.phase_number}"
+            context_class = "badge badge-qualifying"
+        else:
+            context_label = f"Bracket R{matchup.bracket_round or '?'}"
+            context_class = "badge badge-bracket"
+
+        return {
+            "id": ro.id,
+            "context_label": context_label,
+            "context_class": context_class,
+            "secondary_label": "",
+            "left_name": matchup.robot1.robot_name if matchup.robot1 else "?",
+            "right_name": matchup.robot2.robot_name if matchup.robot2 else "BYE",
+            "has_opponent": matchup.robot2_id is not None,
+            "status_label": "Done" if matchup.status == MatchupStatus.completed else "pending",
+            "is_completed": matchup.status == MatchupStatus.completed,
+        }
+
+    matchup = db.query(SubEventMatchup).filter(SubEventMatchup.id == ro.matchup_id).first()
+    if not matchup:
+        return None
+
+    sub_event_name = matchup.sub_event.name if matchup.sub_event else "Sub-event"
+    return {
+        "id": ro.id,
+        "context_label": f"SE R{matchup.round_number}",
+        "context_class": "badge badge-sub_events",
+        "secondary_label": sub_event_name,
+        "left_name": matchup.team1.team_name if matchup.team1 else "?",
+        "right_name": matchup.team2.team_name if matchup.team2 else "BYE",
+        "has_opponent": matchup.team2_id is not None,
+        "status_label": "Done" if matchup.status == MatchupStatus.completed else "pending",
+        "is_completed": matchup.status == MatchupStatus.completed,
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -2866,60 +2279,36 @@ def new_sub_event_form(
     error: str = Query(default=""),
 ):
     ev = _get_event_or_404(event_id, user.id, db)
-    err_el = Div(error, cls="alert alert-error") if error else ""
 
-    # Compute eligible robot pool (for informational display)
     eligible_ids = get_sub_event_eligible_robots(event_id, db)
     eligible_robots = [db.query(Robot).filter(Robot.id == rid).first() for rid in eligible_ids]
     eligible_robots = [r for r in eligible_robots if r]
 
-    eligible_info = Div(
-        P(
-            f"Eligible robot pool: {len(eligible_robots)} robot(s) "
-            "(not in bracket + round 1 bracket losers).",
-            style="color:#888;font-size:0.85rem;margin-bottom:0.5rem;",
-        ),
-        Ul(
-            *[Li(f"{r.robot_name} ({r.roboteer.roboteer_name})", style="color:#aaa;font-size:0.82rem;") for r in eligible_robots[:20]],
-            style="list-style:disc;padding-left:1.2rem;",
-        ) if eligible_robots else P("No eligible robots found.", style="color:#555;font-size:0.82rem;"),
+    return render_template(
+        request,
+        "admin/sub_events/new.html",
+        title="New Sub-event",
+        context={
+            "user": user,
+            "event": ev,
+            "eligible_robot_count": len(eligible_robots),
+            "eligible_robots": [
+                {
+                    "robot_name": robot.robot_name,
+                    "roboteer_name": robot.roboteer.roboteer_name,
+                }
+                for robot in eligible_robots[:20]
+            ],
+            "form_action": f"/admin/events/{event_id}/sub-events/new",
+            "cancel_href": f"/admin/events/{event_id}",
+            "error_message": error,
+            "success_message": "",
+            "info_message": "",
+        },
+        stylesheets=("css/admin.css",),
+        script_srcs=(HTMX_SCRIPT_URL,),
+        body_class="admin-page",
     )
-
-    page = Div(
-        A("← Event", href=f"/admin/events/{event_id}", cls="btn btn-sm btn-secondary",
-          style="margin-bottom:1.2rem;display:inline-block;"),
-        H1("New Sub-event"),
-        err_el if err_el else "",
-        Div(
-            HForm(
-                Div(
-                    Label("Sub-event Name", for_="name"),
-                    Input(type="text", id="name", name="name", cls="form-control",
-                          placeholder="e.g. 2v2 Team Brawl", required=True, autofocus=True),
-                    cls="form-group",
-                ),
-                Div(
-                    Label("Format", for_="format"),
-                    Select(
-                        Option("2v2 Team Bracket", value="2v2_team_bracket"),
-                        id="format", name="format", cls="form-control",
-                    ),
-                    cls="form-group",
-                ),
-                Div(
-                    Button("Create Sub-event", type="submit", cls="btn btn-primary"),
-                    " ",
-                    A("Cancel", href=f"/admin/events/{event_id}", cls="btn btn-secondary"),
-                    cls="form-group",
-                ),
-                method="post",
-                action=f"/admin/events/{event_id}/sub-events/new",
-            ),
-            eligible_info,
-            cls="card",
-        ),
-    )
-    return _page("New Sub-event", page, user=user)
 
 
 @router.post("/events/{event_id}/sub-events/new")
@@ -2971,6 +2360,7 @@ def sub_event_detail(
     user: User = Depends(require_organizer),
     db: Session = Depends(get_db),
     msg: str = Query(default=""),
+    error: str = Query(default=""),
 ):
     ev = _get_event_or_404(event_id, user.id, db)
     se = db.query(SubEvent).filter(SubEvent.id == sub_event_id, SubEvent.event_id == event_id).first()
@@ -2981,15 +2371,18 @@ def sub_event_detail(
         "sub_event_created": ("Sub-event created.", "success"),
         "sub_event_bracket_generated": ("Bracket generated for sub-event.", "success"),
         "sub_event_bracket_advanced": ("Sub-event bracket advanced to next round.", "success"),
+        "sub_event_complete": ("Sub-event marked complete.", "success"),
         "se_scored": ("Fight result saved.", "success"),
         "se_score_cleared": ("Fight result cleared.", "info"),
         "team_created": ("Team created.", "success"),
         "team_deleted": ("Team removed.", "info"),
     }
-    flash = ""
-    if msg in flash_map:
-        t, k = flash_map[msg]
-        flash = Div(t, cls=f"alert alert-{k}")
+    flash_context = _flash_context(
+        msg,
+        flash_map,
+        error=error,
+        fallback_error="Unable to complete that action.",
+    )
 
     teams = (
         db.query(SubEventTeam)
@@ -2998,47 +2391,21 @@ def sub_event_detail(
         .all()
     )
 
-    # Detect robots already assigned
-    assigned_robot_ids: set[int] = set()
-    for t in teams:
-        assigned_robot_ids.add(t.robot1_id)
-        assigned_robot_ids.add(t.robot2_id)
-
     eligible_ids = set(get_sub_event_eligible_robots(event_id, db))
 
-    # Build teams table
-    if teams:
-        team_rows = []
-        for t in teams:
-            r1_warn = "⚠ ineligible" if t.robot1_id not in eligible_ids else ""
-            r2_warn = "⚠ ineligible" if t.robot2_id not in eligible_ids else ""
-            team_rows.append(Tr(
-                Td(t.team_name, style="font-weight:600;"),
-                Td(
-                    Span(t.robot1.robot_name),
-                    Span(f" {r1_warn}", style="color:#f59e0b;font-size:0.75rem;") if r1_warn else "",
-                ),
-                Td(
-                    Span(t.robot2.robot_name),
-                    Span(f" {r2_warn}", style="color:#f59e0b;font-size:0.75rem;") if r2_warn else "",
-                ),
-                Td(
-                    _inline_post_btn(
-                        f"/admin/events/{event_id}/sub-events/{sub_event_id}/teams/{t.id}/delete",
-                        "Remove",
-                        "btn-sm btn-danger",
-                    )
-                ),
-            ))
-        teams_table = Div(
-            Table(
-                Thead(Tr(Th("Team"), Th("Robot 1"), Th("Robot 2"), Th(""))),
-                Tbody(*team_rows),
-            ),
-            cls="table-wrap",
+    team_rows = []
+    for team in teams:
+        team_rows.append(
+            {
+                "id": team.id,
+                "team_name": team.team_name,
+                "robot1_name": team.robot1.robot_name,
+                "robot2_name": team.robot2.robot_name,
+                "robot1_warning": "ineligible" if team.robot1_id not in eligible_ids else "",
+                "robot2_warning": "ineligible" if team.robot2_id not in eligible_ids else "",
+                "delete_action": f"/admin/events/{event_id}/sub-events/{sub_event_id}/teams/{team.id}/delete",
+            }
         )
-    else:
-        teams_table = P("No teams yet. Add teams from the eligible robot pool.", cls="empty")
 
     # Bracket section
     all_matchups = (
@@ -3049,29 +2416,32 @@ def sub_event_detail(
     )
     has_bracket = bool(all_matchups)
 
-    bracket_section_items = []
+    bracket_rounds = []
     if has_bracket:
         rounds: dict[int, list[SubEventMatchup]] = {}
         for m in all_matchups:
             rounds.setdefault(m.round_number, []).append(m)
         max_round_num = max(rounds.keys())
         for rnd in sorted(rounds.keys()):
-            label = _se_round_label(rnd, max_round_num)
-            bracket_section_items.append(P(label, cls="bracket-round-header"))
-            for m in rounds[rnd]:
-                bracket_section_items.append(
-                    _sub_event_matchup_card(m, sub_event_id, event_id, show_actions=True)
-                )
+            bracket_rounds.append(
+                {
+                    "label": _se_round_label(rnd, max_round_num),
+                    "matchups": [
+                        _sub_event_matchup_context(matchup, sub_event_id, event_id, show_actions=True)
+                        for matchup in rounds[rnd]
+                    ],
+                }
+            )
 
-    # Action buttons
     bracket_actions = []
     if not has_bracket and len(teams) >= 2:
-        bracket_actions.append(HForm(
-            Button("Generate Bracket", type="submit", cls="btn btn-warning"),
-            method="post",
-            action=f"/admin/events/{event_id}/sub-events/{sub_event_id}/generate-bracket",
-            style="display:inline;",
-        ))
+        bracket_actions.append(
+            {
+                "action": f"/admin/events/{event_id}/sub-events/{sub_event_id}/generate-bracket",
+                "label": "Generate Bracket",
+                "button_class": "btn btn-warning",
+            }
+        )
 
     if has_bracket:
         max_round_in_db = max(m.round_number for m in all_matchups)
@@ -3079,63 +2449,42 @@ def sub_event_detail(
         current_all_done = all(m.status == MatchupStatus.completed for m in current_round_matchups)
         winners_count = sum(1 for m in current_round_matchups if m.winner_team_id)
         if current_all_done and winners_count > 1:
-            bracket_actions.append(HForm(
-                Button("Generate Next Round →", type="submit", cls="btn btn-warning"),
-                method="post",
-                action=f"/admin/events/{event_id}/sub-events/{sub_event_id}/bracket/advance",
-                style="display:inline;",
-            ))
-        # Mark sub-event complete if final is done
+            bracket_actions.append(
+                {
+                    "action": f"/admin/events/{event_id}/sub-events/{sub_event_id}/bracket/advance",
+                    "label": "Generate Next Round &rarr;",
+                    "button_class": "btn btn-warning",
+                }
+            )
         if current_all_done and winners_count <= 1 and se.status == SubEventStatus.active:
-            bracket_actions.append(HForm(
-                Button("Mark Sub-event Complete", type="submit", cls="btn btn-success"),
-                method="post",
-                action=f"/admin/events/{event_id}/sub-events/{sub_event_id}/complete",
-                style="display:inline;",
-            ))
+            bracket_actions.append(
+                {
+                    "action": f"/admin/events/{event_id}/sub-events/{sub_event_id}/complete",
+                    "label": "Mark Sub-event Complete",
+                    "button_class": "btn btn-success",
+                }
+            )
 
-    # Teams card actions
-    team_card_actions = []
-    if se.status == SubEventStatus.setup:
-        team_card_actions.append(
-            A("+ Add Team", href=f"/admin/events/{event_id}/sub-events/{sub_event_id}/teams/add",
-              cls="btn btn-sm btn-primary")
-        )
-
-    teams_card = Div(
-        Div(
-            H2(f"Teams ({len(teams)})"),
-            Div(*team_card_actions) if team_card_actions else "",
-            cls="card-header",
-        ),
-        teams_table,
-        cls="card",
+    return render_template(
+        request,
+        "admin/sub_events/detail.html",
+        title=se.name,
+        context={
+            "user": user,
+            "event": ev,
+            "sub_event": se,
+            "team_rows": team_rows,
+            "team_count": len(teams),
+            "can_add_team": se.status == SubEventStatus.setup,
+            "add_team_href": f"/admin/events/{event_id}/sub-events/{sub_event_id}/teams/add",
+            "bracket_rounds": bracket_rounds,
+            "bracket_actions": bracket_actions,
+            **flash_context,
+        },
+        stylesheets=("css/admin.css",),
+        script_srcs=(HTMX_SCRIPT_URL,),
+        body_class="admin-page",
     )
-
-    bracket_card = Div(
-        Div(
-            H2("Bracket"),
-            Div(*bracket_actions, style="display:flex;gap:0.5rem;") if bracket_actions else "",
-            cls="card-header",
-        ),
-        (Div(*bracket_section_items) if bracket_section_items else P("No bracket yet.", cls="empty")),
-        cls="card",
-    )
-
-    page = Div(
-        A("← Event", href=f"/admin/events/{event_id}", cls="btn btn-sm btn-secondary",
-          style="margin-bottom:1.2rem;display:inline-block;"),
-        H1(se.name),
-        Small(
-            Span(se.status.value, cls=f"badge badge-{se.status.value}"),
-            f"  ·  {se.format.value}  ·  {ev.event_name}",
-            style="color:#888;display:block;margin-bottom:1.2rem;",
-        ),
-        flash if flash else "",
-        teams_card,
-        bracket_card,
-    )
-    return _page(se.name, page, user=user)
 
 
 @router.post("/events/{event_id}/sub-events/{sub_event_id}/complete")
@@ -3175,86 +2524,56 @@ def add_team_form(
     if not se:
         return RedirectResponse(f"/admin/events/{event_id}", status_code=303)
 
-    err_el = Div(error, cls="alert alert-error") if error else ""
-
     eligible_ids = get_sub_event_eligible_robots(event_id, db)
     eligible_robots = [db.query(Robot).filter(Robot.id == rid).first() for rid in eligible_ids]
     eligible_robots = [r for r in eligible_robots if r]
 
-    # Robots already assigned to a team in this sub-event
     existing_teams = db.query(SubEventTeam).filter(SubEventTeam.sub_event_id == sub_event_id).all()
     already_assigned: set[int] = set()
     for t in existing_teams:
         already_assigned.add(t.robot1_id)
         already_assigned.add(t.robot2_id)
 
-    if not eligible_robots:
-        page = Div(
-            A("← Sub-event", href=f"/admin/events/{event_id}/sub-events/{sub_event_id}",
-              cls="btn btn-sm btn-secondary", style="margin-bottom:1.2rem;display:inline-block;"),
-            H1("Add Team"),
-            Div("No eligible robots available for this sub-event.", cls="alert alert-info"),
-        )
-        return _page("Add Team", page, user=user)
-
-    def _robot_option(r: Robot, slot: str) -> Option:
+    def _robot_option(r: Robot) -> dict[str, object]:
         taken = r.id in already_assigned
         label = f"{r.robot_name} ({r.roboteer.roboteer_name})"
         if taken:
             label += " — already assigned"
-        return Option(label, value=str(r.id), **({"disabled": True} if taken else {}))
+        return {
+            "value": str(r.id),
+            "label": label,
+            "disabled": taken,
+        }
 
-    options1 = [Option("— Select robot —", value="")] + [_robot_option(r, "r1") for r in eligible_robots]
-    options2 = [Option("— Select robot —", value="")] + [_robot_option(r, "r2") for r in eligible_robots]
+    robot_options = [{"value": "", "label": "— Select robot —", "disabled": False}] + [
+        _robot_option(robot) for robot in eligible_robots
+    ]
 
-    if already_assigned:
-        assign_note = P(
-            f"{len(already_assigned)} robot(s) already assigned to teams in this sub-event (marked above).",
-            style="color:#888;font-size:0.82rem;margin-bottom:0.75rem;",
-        )
-    else:
-        assign_note = ""
-
-    page = Div(
-        A("← Sub-event", href=f"/admin/events/{event_id}/sub-events/{sub_event_id}",
-          cls="btn btn-sm btn-secondary", style="margin-bottom:1.2rem;display:inline-block;"),
-        H1("Add Team"),
-        err_el if err_el else "",
-        Div(
-            assign_note,
-            HForm(
-                Div(
-                    Label("Team Name", for_="team_name"),
-                    Input(type="text", id="team_name", name="team_name", cls="form-control",
-                          placeholder="e.g. Team Chaos", required=True, autofocus=True),
-                    cls="form-group",
-                ),
-                Div(
-                    Label("Robot 1", for_="robot1_id"),
-                    Select(*options1, id="robot1_id", name="robot1_id",
-                           cls="form-control", required=True),
-                    cls="form-group",
-                ),
-                Div(
-                    Label("Robot 2", for_="robot2_id"),
-                    Select(*options2, id="robot2_id", name="robot2_id",
-                           cls="form-control", required=True),
-                    cls="form-group",
-                ),
-                Div(
-                    Button("Add Team", type="submit", cls="btn btn-primary"),
-                    " ",
-                    A("Cancel", href=f"/admin/events/{event_id}/sub-events/{sub_event_id}",
-                      cls="btn btn-secondary"),
-                    cls="form-group",
-                ),
-                method="post",
-                action=f"/admin/events/{event_id}/sub-events/{sub_event_id}/teams/add",
+    return render_template(
+        request,
+        "admin/sub_events/add_team.html",
+        title="Add Team",
+        context={
+            "user": user,
+            "event": ev,
+            "sub_event": se,
+            "has_eligible_robots": bool(eligible_robots),
+            "robot_options": robot_options,
+            "already_assigned_count": len(already_assigned),
+            "submit_action": f"/admin/events/{event_id}/sub-events/{sub_event_id}/teams/add",
+            "cancel_href": f"/admin/events/{event_id}/sub-events/{sub_event_id}",
+            "error_message": error,
+            "success_message": "",
+            "info_message": (
+                f"{len(already_assigned)} robot(s) already assigned to teams in this sub-event (marked above)."
+                if already_assigned
+                else ""
             ),
-            cls="card",
-        ),
+        },
+        stylesheets=("css/admin.css",),
+        script_srcs=(HTMX_SCRIPT_URL,),
+        body_class="admin-page",
     )
-    return _page("Add Team", page, user=user)
 
 
 @router.post("/events/{event_id}/sub-events/{sub_event_id}/teams/add")
@@ -3449,23 +2768,10 @@ def sub_event_score_form(
     t1: SubEventTeam = m.team1
     t2: SubEventTeam = m.team2
 
-    err_el = Div(error, cls="alert alert-error") if error else ""
-
-    existing_result = ""
+    existing_result = None
     if m.status == MatchupStatus.completed and m.winner_team_id:
         winner = t1 if m.winner_team_id == t1.id else t2
-        existing_result = Div(
-            P(
-                f"Current result: {winner.team_name} wins",
-                style="color:#4ade80;font-size:0.9rem;margin-bottom:0.75rem;",
-            ),
-            HForm(
-                Button("Clear result", type="submit", cls="btn btn-danger btn-sm"),
-                method="post",
-                action=f"/admin/events/{event_id}/sub-events/{sub_event_id}/matchups/{matchup_id}/clear-score",
-            ),
-            style="margin-bottom:1rem;padding-bottom:1rem;border-bottom:1px solid #2a2a2a;",
-        )
+        existing_result = {"label": f"{winner.team_name} wins"}
 
     back = f"/admin/events/{event_id}/sub-events/{sub_event_id}"
     form_title = "Edit Fight" if m.status == MatchupStatus.completed else "Score Fight"
@@ -3473,52 +2779,40 @@ def sub_event_score_form(
     def _team_desc(t: SubEventTeam) -> str:
         return f"{t.team_name}  ({t.robot1.robot_name} & {t.robot2.robot_name})"
 
-    page = Div(
-        A(f"← {se.name}", href=back, cls="btn btn-sm btn-secondary",
-          style="margin-bottom:1.2rem;display:inline-block;"),
-        H1(form_title),
-        err_el if err_el else "",
-        Div(
-            P(
-                Span(t1.team_name, style="font-weight:700;"),
-                Span(" vs ", style="color:#555;"),
-                Span(t2.team_name, style="font-weight:700;"),
-                style="font-size:1rem;margin-bottom:0.5rem;",
-            ),
-            P(
-                Span(_team_desc(t1), style="color:#888;font-size:0.82rem;"),
-                Span(" vs ", style="color:#555;font-size:0.82rem;"),
-                Span(_team_desc(t2), style="color:#888;font-size:0.82rem;"),
-                style="margin-bottom:1rem;",
-            ),
-            existing_result,
-            HForm(
-                Div(
-                    Label("Winner", for_="winner_team_id"),
-                    Select(
-                        Option(f"— Select winner —", value=""),
-                        Option(t1.team_name, value=str(t1.id)),
-                        Option(t2.team_name, value=str(t2.id)),
-                        id="winner_team_id",
-                        name="winner_team_id",
-                        cls="form-control",
-                        required=True,
-                    ),
-                    cls="form-group",
-                ),
-                Div(
-                    Button("Save Result", type="submit", cls="btn btn-primary"),
-                    " ",
-                    A("Cancel", href=back, cls="btn btn-secondary"),
-                    cls="form-group",
-                ),
-                method="post",
-                action=f"/admin/events/{event_id}/sub-events/{sub_event_id}/matchups/{matchup_id}/score",
-            ),
-            cls="card",
-        ),
+    winner_options = [
+        {"value": "", "label": "— Select winner —", "selected": False},
+        {"value": str(t1.id), "label": t1.team_name, "selected": m.winner_team_id == t1.id},
+        {"value": str(t2.id), "label": t2.team_name, "selected": m.winner_team_id == t2.id},
+    ]
+
+    return render_template(
+        request,
+        "admin/sub_events/score.html",
+        title=form_title,
+        context={
+            "user": user,
+            "event": ev,
+            "sub_event": se,
+            "form_title": form_title,
+            "back_href": back,
+            "matchup": {
+                "team1_name": t1.team_name,
+                "team2_name": t2.team_name,
+                "team1_desc": _team_desc(t1),
+                "team2_desc": _team_desc(t2),
+            },
+            "existing_result": existing_result,
+            "winner_options": winner_options,
+            "save_action": f"/admin/events/{event_id}/sub-events/{sub_event_id}/matchups/{matchup_id}/score",
+            "clear_action": f"/admin/events/{event_id}/sub-events/{sub_event_id}/matchups/{matchup_id}/clear-score",
+            "error_message": error,
+            "success_message": "",
+            "info_message": "",
+        },
+        stylesheets=("css/admin.css",),
+        script_srcs=(HTMX_SCRIPT_URL,),
+        body_class="admin-page",
     )
-    return _page(form_title, page, user=user)
 
 
 @router.post("/events/{event_id}/sub-events/{sub_event_id}/matchups/{matchup_id}/score")
@@ -3594,8 +2888,6 @@ def run_order_editor(
 ):
     ev = _get_event_or_404(event_id, user.id, db)
 
-    flash = Div("Run order saved.", cls="alert alert-success") if msg == "saved" else ""
-
     run_order_rows = (
         db.query(RunOrder)
         .filter(RunOrder.event_id == event_id)
@@ -3603,101 +2895,30 @@ def run_order_editor(
         .all()
     )
 
-    items = []
-    for ro in run_order_rows:
-        if ro.matchup_type == RunOrderMatchupType.main:
-            m = db.query(Matchup).filter(Matchup.id == ro.matchup_id).first()
-            if not m:
-                continue
-            r1_name = m.robot1.robot_name if m.robot1 else "?"
-            r2_name = m.robot2.robot_name if m.robot2 else "BYE"
-            phase: Phase = m.phase
-            if phase.phase_type == PhaseType.qualifying:
-                context = f"Q{phase.phase_number}"
-            else:
-                context = f"Bracket R{m.bracket_round or '?'}"
-            label = Span(
-                Span(context, cls="badge badge-qualifying" if phase.phase_type == PhaseType.qualifying else "badge-bracket",
-                     style="margin-right:0.5rem;font-size:0.72rem;"),
-                Strong(r1_name),
-                Span(" vs " if m.robot2_id else " — ", cls="matchup-vs"),
-                Strong(r2_name if m.robot2_id else "BYE"),
-                cls="matchup-robots",
-            )
-            is_done = m.status == MatchupStatus.completed
-        else:
-            m = db.query(SubEventMatchup).filter(SubEventMatchup.id == ro.matchup_id).first()
-            if not m:
-                continue
-            t1_name = m.team1.team_name if m.team1 else "?"
-            t2_name = m.team2.team_name if m.team2 else "BYE"
-            se_name = m.sub_event.name if m.sub_event else "Sub-event"
-            label = Span(
-                Span(f"SE R{m.round_number}", cls="badge badge-sub_events",
-                     style="margin-right:0.5rem;font-size:0.72rem;"),
-                Small(f"[{se_name}] ", style="color:#888;"),
-                Strong(t1_name),
-                Span(" vs " if m.team2_id else " — ", cls="matchup-vs"),
-                Strong(t2_name if m.team2_id else "BYE"),
-                cls="matchup-robots",
-            )
-            is_done = m.status == MatchupStatus.completed
+    rows = []
+    for run_order_row in run_order_rows:
+        row_context = _run_order_row_context(run_order_row, db)
+        if row_context:
+            rows.append(row_context)
 
-        result_el = (
-            Span("✓ Done", cls="matchup-result-label")
-            if is_done
-            else Span("pending", cls="matchup-result-pending")
-        )
-        drag = Span("⠿", cls="drag-handle", title="Drag to reorder") if not is_done else Span("", style="width:1.1rem;display:inline-block;")
-
-        items.append(Li(
-            drag,
-            label,
-            result_el,
-            cls="matchup-item" + (" is-bye" if is_done else ""),
-            data_ro_id=str(ro.id),
-            style="opacity:0.5;" if is_done else "",
-        ))
-
-    sort_script = Script(src=_SORTABLEJS)
-    sort_init = Script(f"""
-document.addEventListener('DOMContentLoaded', function() {{
-    var el = document.getElementById('run-order-list');
-    if (!el) return;
-    Sortable.create(el, {{
-        animation: 150,
-        handle: '.drag-handle',
-        filter: '.is-bye',
-        onEnd: function() {{
-            var order = Array.from(el.querySelectorAll('.matchup-item:not(.is-bye)'))
-                            .map(function(e) {{ return e.dataset.roId; }});
-            fetch('/admin/events/{event_id}/run-order/reorder', {{
-                method: 'POST',
-                headers: {{'Content-Type': 'application/json'}},
-                body: JSON.stringify({{order: order}})
-            }});
-        }}
-    }});
-}});
-""")
-
-    page = Div(
-        A("← Event", href=f"/admin/events/{event_id}", cls="btn btn-sm btn-secondary",
-          style="margin-bottom:1.2rem;display:inline-block;"),
-        H1("Run Order"),
-        Small(f"{ev.event_name}  ·  Drag pending fights to set the order.",
-              style="color:#888;display:block;margin-bottom:1.2rem;"),
-        flash if flash else "",
-        Div(
-            Ul(*items, id="run-order-list", cls="matchup-list")
-            if items
-            else P("No fights in the run order yet.", cls="empty"),
-            cls="card",
-        ),
-        sort_script,
-        sort_init,
+    return render_template(
+        request,
+        "admin/events/run_order.html",
+        title="Run Order",
+        context={
+            "user": user,
+            "event": ev,
+            "rows": rows,
+            "reorder_enabled": any(not row["is_completed"] for row in rows),
+            "reorder_url": f"/admin/events/{event_id}/run-order/reorder",
+            "error_message": "",
+            "success_message": "Run order saved." if msg == "saved" else "",
+            "info_message": "",
+        },
+        stylesheets=("css/admin.css",),
+        script_srcs=(HTMX_SCRIPT_URL, _SORTABLEJS),
+        body_class="admin-page",
     )
-    return _page("Run Order", page, user=user)
 
 
 @router.post("/events/{event_id}/run-order/reorder")

@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{{ page_title }} - {{ app_name }}</title>
+    <link rel="stylesheet" href="/static/css/base.css">
+    {% for stylesheet in stylesheets %}
+    <link rel="stylesheet" href="/static/{{ stylesheet }}">
+    {% endfor %}
+    {% for script_src in script_srcs %}
+    <script src="{{ script_src }}"></script>
+    {% endfor %}
+    {% block head %}{% endblock %}
+</head>
+<body{% if body_class %} class="{{ body_class }}"{% endif %}>
+    {% block body %}{% endblock %}
+</body>
+</html>

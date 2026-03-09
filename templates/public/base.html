@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+
+{% block body %}
+    {% if event_nav %}
+        {% include "public/partials/topbar.html" %}
+    {% endif %}
+    {% block public_topbar %}{% endblock %}
+    <main class="{{ content_class or 'public-content' }}">
+        {% include "partials/alerts.html" %}
+        {% block public_content %}{% endblock %}
+    </main>
+{% endblock %}

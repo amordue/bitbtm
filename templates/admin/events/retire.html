@@ -1,0 +1,38 @@
+{% extends "admin/base.html" %}
+{% import "admin/partials/macros.html" as admin %}
+
+{% block admin_content %}
+<section>
+    <a href="/admin/events/{{ event.id }}" class="btn btn-sm btn-secondary admin-back-link">&larr; Event</a>
+    {% include "admin/partials/alerts.html" %}
+
+    {% call admin.card('Retire ' ~ robot.robot_name) %}
+    {% if show_form %}
+    <p class="admin-meta-line">Retiring a robot removes it from the active roster from the selected phase onward. Its results are preserved. The next available reserve will be swapped in.</p>
+    <form method="post" action="/admin/events/{{ event.id }}/robots/{{ entry_id }}/retire">
+        <div class="form-group">
+            <label for="phase_id">Retired after which phase?</label>
+            <select id="phase_id" name="phase_id" class="form-control" required>
+                {% for phase in phase_options %}
+                <option value="{{ phase.id }}">{{ phase.label }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="form-group">
+            <label for="reserve_er_id">Replace with reserve (optional)</label>
+            <select id="reserve_er_id" name="reserve_er_id" class="form-control">
+                <option value="">&mdash; No replacement &mdash;</option>
+                {% for reserve in reserve_options %}
+                <option value="{{ reserve.id }}">{{ reserve.label }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="admin-form-actions">
+            <button type="submit" class="btn btn-warning">Confirm Retirement</button>
+            <a href="/admin/events/{{ event.id }}" class="btn btn-secondary">Cancel</a>
+        </div>
+    </form>
+    {% endif %}
+    {% endcall %}
+</section>
+{% endblock %}

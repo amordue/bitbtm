@@ -1,0 +1,16 @@
+{% extends "public/base.html" %}
+
+{% block public_content %}
+<section>
+    <h1>&#128241; Event QR Code</h1>
+    <p class="public-subtitle">{{ event.event_name }} · {{ event.weight_class }}</p>
+    <div class="card">
+        <p class="qr-description">Show this QR code on a screen at the venue for quick mobile access.</p>
+        <div class="qr-wrap">
+            <img src="{{ qr_image_url }}" alt="QR code for {{ event.event_name }}">
+            <p class="qr-url">{{ event_url }}</p>
+            <a href="{{ event_url }}" class="btn btn-primary btn-sm">Open event page</a>
+        </div>
+    </div>
+</section>
+{% endblock %}

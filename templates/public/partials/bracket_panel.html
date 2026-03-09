@@ -1,0 +1,43 @@
+<section
+    id="{{ bracket_panel.id }}"
+    class="{{ bracket_panel.class_name }}"
+    {% if bracket_panel.hx_get %}hx-get="{{ bracket_panel.hx_get }}"{% endif %}
+    {% if bracket_panel.hx_trigger %}hx-trigger="{{ bracket_panel.hx_trigger }}"{% endif %}
+    {% if bracket_panel.hx_swap %}hx-swap="{{ bracket_panel.hx_swap }}"{% endif %}
+>
+    <h1>Bracket</h1>
+    <p class="public-subtitle">{{ event.event_name }} · {{ event.weight_class }}</p>
+    {% if bracket.empty_message %}
+    <div class="card">
+        <p class="empty">{{ bracket.empty_message }}</p>
+    </div>
+    {% else %}
+    <div class="card">
+        {% for round in bracket.rounds %}
+        <p class="round-header">{{ round.label }}</p>
+        {% for matchup in round.matchups %}
+        <div style="display:flex;border:1px solid #2a2a2a;border-radius:6px;margin-bottom:0.5rem;overflow:hidden;background:#161616;">
+            <div style="flex:1;">
+                {% for robot in matchup.robots %}
+                <div style="display:flex;align-items:center;padding:0.35rem 0.5rem;{% if robot.is_winner %}border-radius:4px;background:#1f3a1f;{% endif %}">
+                    {% if robot.href %}
+                    <a href="{{ robot.href }}">{{ robot.name }}</a>
+                    {% else %}
+                    <span style="color:#555;font-style:italic;">{{ robot.name }}</span>
+                    {% endif %}
+                    <span style="margin-left:auto;{% if robot.points == '—' %}color:#444;{% elif robot.is_winner %}font-weight:700;color:#4ade80;{% else %}color:#f87171;{% endif %}">{{ robot.points }}</span>
+                </div>
+                {% if not loop.last %}
+                <div style="border-top:1px solid #222;margin:0 0.5rem;"></div>
+                {% endif %}
+                {% endfor %}
+            </div>
+            <div style="padding:0.5rem;align-self:center;">
+                <span title="{{ matchup.status }}" style="{% if matchup.status == 'completed' %}color:#4ade80;{% else %}color:#374151;{% endif %}">{% if matchup.status == 'completed' %}●{% else %}○{% endif %}</span>
+            </div>
+        </div>
+        {% endfor %}
+        {% endfor %}
+    </div>
+    {% endif %}
+</section>

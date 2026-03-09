@@ -1,0 +1,43 @@
+{% extends "admin/base.html" %}
+
+{% block admin_content %}
+<section>
+    <a href="/admin/events/{{ event.id }}/sub-events/{{ sub_event.id }}" class="btn btn-sm btn-secondary admin-back-link">&larr; {{ sub_event.name }}</a>
+    {% include "admin/partials/alerts.html" %}
+
+    <section class="card admin-card">
+        <h1>Add Team</h1>
+
+        {% if not has_eligible_robots %}
+        <p class="alert alert-info">No eligible robots available for this sub-event.</p>
+        {% else %}
+        <form method="post" action="{{ submit_action }}">
+            <div class="form-group">
+                <label for="team_name">Team Name</label>
+                <input id="team_name" name="team_name" type="text" class="form-control" placeholder="e.g. Team Chaos" required autofocus>
+            </div>
+            <div class="form-group">
+                <label for="robot1_id">Robot 1</label>
+                <select id="robot1_id" name="robot1_id" class="form-control" required>
+                    {% for option in robot_options %}
+                    <option value="{{ option.value }}"{% if option.disabled %} disabled{% endif %}>{{ option.label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="robot2_id">Robot 2</label>
+                <select id="robot2_id" name="robot2_id" class="form-control" required>
+                    {% for option in robot_options %}
+                    <option value="{{ option.value }}"{% if option.disabled %} disabled{% endif %}>{{ option.label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="admin-form-actions">
+                <button type="submit" class="btn btn-primary">Add Team</button>
+                <a href="{{ cancel_href }}" class="btn btn-secondary">Cancel</a>
+            </div>
+        </form>
+        {% endif %}
+    </section>
+</section>
+{% endblock %}

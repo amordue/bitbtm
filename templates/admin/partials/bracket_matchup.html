@@ -1,0 +1,23 @@
+<article class="admin-bracket-matchup">
+    <div class="admin-bracket-matchup-body">
+        {% for robot in [matchup.robot1, matchup.robot2] %}
+        <div class="admin-bracket-robot-row{% if robot.is_winner %} is-winner{% endif %}{% if robot.is_tbd %} is-tbd{% endif %}">
+            {% if robot.href %}
+            <a href="{{ robot.href }}">{{ robot.name }}</a>
+            {% else %}
+            <span>{{ robot.name }}</span>
+            {% endif %}
+            <span class="admin-bracket-points{% if robot.points is none %} is-empty{% endif %}">
+                {% if robot.points is none %}
+                &mdash;
+                {% else %}
+                {{ robot.points }}
+                {% endif %}
+            </span>
+        </div>
+        {% endfor %}
+    </div>
+    <div class="admin-bracket-actions">
+        <a href="{{ matchup.action_href }}" class="btn btn-sm {% if matchup.is_completed %}btn-secondary{% else %}btn-primary{% endif %}">{{ matchup.action_label }}</a>
+    </div>
+</article>

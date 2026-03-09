@@ -1,0 +1,39 @@
+{% extends "admin/base.html" %}
+{% import "admin/partials/macros.html" as admin %}
+
+{% block admin_content %}
+<section>
+    <a href="/admin/events/{{ event.id }}" class="btn btn-sm btn-secondary admin-back-link">&larr; Event</a>
+    {% include "admin/partials/alerts.html" %}
+
+    {% call admin.card('Upload Image - ' ~ robot.robot_name) %}
+    {% if current_image_url %}
+    <div style="margin-bottom: 1rem;">
+        <p class="admin-meta-line">Current image:</p>
+        <img src="{{ current_image_url }}" alt="{{ robot.robot_name }}" style="max-width: 200px; max-height: 150px; border-radius: 6px;">
+    </div>
+    {% endif %}
+
+    <form method="post" action="/admin/events/{{ event.id }}/robots/{{ robot.id }}/upload-image" enctype="multipart/form-data">
+        <div class="form-group">
+            <label for="image_file">Upload image file</label>
+            <input type="file" id="image_file" name="image_file" class="form-control" accept="image/*">
+        </div>
+        <div class="form-group">
+            <label for="image_url">Or paste image URL</label>
+            <input
+                type="url"
+                id="image_url"
+                name="image_url"
+                class="form-control"
+                placeholder="https://example.com/robot.jpg"
+                value="{{ default_image_url }}">
+        </div>
+        <div class="admin-form-actions">
+            <button type="submit" class="btn btn-primary">Save Image</button>
+            <a href="/admin/events/{{ event.id }}" class="btn btn-secondary">Cancel</a>
+        </div>
+    </form>
+    {% endcall %}
+</section>
+{% endblock %}

@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+
+{% block body %}
+    {% block admin_topbar %}
+    {% include "admin/partials/topbar.html" %}
+    {% endblock %}
+    <main class="admin-content">
+        {% block admin_header %}{% endblock %}
+        {% block admin_content %}{% endblock %}
+    </main>
+{% endblock %}

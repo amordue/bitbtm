@@ -1,0 +1,53 @@
+{% extends "admin/base.html" %}
+
+{% block head %}
+    {% if reorder_enabled %}
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            const list = document.getElementById('run-order-list');
+            if (!list || typeof Sortable === 'undefined') {
+                return;
+            }
+
+            Sortable.create(list, {
+                animation: 150,
+                handle: '.admin-drag-handle',
+                filter: '.is-locked',
+                onEnd: function () {
+                    const order = Array.from(list.querySelectorAll('.admin-matchup-item:not(.is-locked)')).map(function (element) {
+                        return element.dataset.roId;
+                    });
+
+                    fetch('{{ reorder_url }}', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ order: order })
+                    });
+                }
+            });
+        });
+    </script>
+    {% endif %}
+{% endblock %}
+
+{% block admin_content %}
+<section>
+    <a href="/admin/events/{{ event.id }}" class="btn btn-sm btn-secondary admin-back-link">&larr; Event</a>
+    {% include "admin/partials/alerts.html" %}
+
+    <section class="card admin-card">
+        <h1>Run Order</h1>
+        <p class="admin-helper-copy">{{ event.event_name }} &middot; Drag pending fights to set the order.</p>
+
+        {% if rows %}
+        <ul id="run-order-list" class="admin-matchup-list">
+            {% for row in rows %}
+            {% include "admin/partials/run_order_item.html" %}
+            {% endfor %}
+        </ul>
+        {% else %}
+        <p class="empty">No fights in the run order yet.</p>
+        {% endif %}
+    </section>
+</section>
+{% endblock %}

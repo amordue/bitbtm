@@ -1,0 +1,48 @@
+{% if message_text %}
+<p class="alert alert-{{ 'error' if message_kind == 'error' else 'info' }}">{{ message_text }}</p>
+{% elif preview_rows %}
+<form method="post" action="/admin/events/{{ event_id }}/import">
+    <p class="admin-meta-line">{{ registration_count }} registrations found. Check rows to import; tick 'Reserve' to designate as a reserve robot.</p>
+    <input type="hidden" name="sheet_url" value="{{ sheet_url }}">
+
+    <div class="table-wrap" style="margin: 0.75rem 0 1rem;">
+        <table>
+            <thead>
+                <tr>
+                    <th>Import</th>
+                    <th>Reserve</th>
+                    <th>Roboteer</th>
+                    <th>Robot</th>
+                    <th>Weapon</th>
+                    <th>Image URL</th>
+                    <th>Status</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in preview_rows %}
+                <tr>
+                    <td>
+                        <input
+                            type="checkbox"
+                            name="row_ids"
+                            value="{{ row.row_id }}"
+                            {% if row.import_checked %}checked{% endif %}
+                            {% if row.import_disabled %}disabled{% endif %}>
+                    </td>
+                    <td><input type="checkbox" name="reserve_ids" value="{{ row.row_id }}"></td>
+                    <td>{{ row.roboteer_name }}</td>
+                    <td>{{ row.robot_name }}</td>
+                    <td>{{ row.weapon_type }}</td>
+                    <td style="max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ row.image_url }}</td>
+                    <td><span class="{{ row.status_class }}">{{ row.status_text }}</span></td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <div class="admin-form-actions">
+        <button type="submit" class="btn btn-primary">Import Selected</button>
+    </div>
+</form>
+{% endif %}

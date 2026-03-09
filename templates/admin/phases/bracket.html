@@ -1,0 +1,55 @@
+{% extends "admin/base.html" %}
+{% import "admin/partials/macros.html" as admin %}
+
+{% block admin_content %}
+<section>
+    <div class="admin-form-actions admin-back-links-row">
+        <a href="/admin/events/{{ event.id }}" class="btn btn-sm btn-secondary admin-back-link">&larr; Event</a>
+        <a href="/admin/events/{{ event.id }}/qualifying/standings" class="btn btn-sm btn-secondary admin-back-link">Qualifying standings</a>
+    </div>
+    {% include "admin/partials/alerts.html" %}
+
+    {% if not bracket_phase %}
+    {% call admin.card('Bracket') %}
+    <p class="empty">No bracket yet. Generate it from the event page.</p>
+    {% endcall %}
+    {% else %}
+        {% set bracket_actions %}
+            {% if can_advance %}
+            {{ admin.action_form(advance_action, 'Generate Next Round &rarr;', 'btn btn-warning') }}
+            {% endif %}
+        {% endset %}
+        {% call admin.card('Bracket', bracket_actions) %}
+        <p class="admin-phase-meta">
+            {% set status = bracket_phase.status %}
+            {% include "admin/partials/status_badge.html" %}
+        </p>
+        {% endcall %}
+
+        {% if show_rearrange %}
+        {% call admin.card('Rearrange Round 1 Pairings') %}
+        <div class="admin-card-split">
+            <p class="admin-helper-copy">Swap robot pairings before any fights begin.</p>
+            <a href="{{ rearrange_href }}" class="btn btn-sm btn-secondary">Rearrange</a>
+        </div>
+        {% endcall %}
+        {% endif %}
+
+        {% if rounds %}
+            {% for round in rounds %}
+            {% call admin.card(round.label) %}
+                <div class="admin-bracket-stack">
+                    {% for matchup in round.matchups %}
+                    {% include "admin/partials/bracket_matchup.html" %}
+                    {% endfor %}
+                </div>
+            {% endcall %}
+            {% endfor %}
+        {% else %}
+        {% call admin.card('Bracket') %}
+        <p class="empty">No matchups yet.</p>
+        {% endcall %}
+        {% endif %}
+    {% endif %}
+</section>
+{% endblock %}

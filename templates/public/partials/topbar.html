@@ -1,0 +1,8 @@
+<header class="public-topbar">
+    <span class="public-topbar-title">&#9881; {{ event_title }}</span>
+    <nav class="public-topbar-links" aria-label="Event navigation">
+        {% for link in event_nav %}
+        <a href="{{ link.href }}" class="public-topbar-link{% if link.active %} is-active{% endif %}">{{ link.label }}</a>
+        {% endfor %}
+    </nav>
+</header>

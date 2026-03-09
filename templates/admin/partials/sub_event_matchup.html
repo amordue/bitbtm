@@ -1,0 +1,24 @@
+<article class="admin-bracket-matchup">
+    <div class="admin-bracket-matchup-body">
+        {% for team in matchup.teams %}
+        <div class="admin-bracket-robot-row{% if team.is_winner %} is-winner{% endif %}{% if team.is_tbd %} is-tbd{% endif %}">
+            <div>
+                <div>{{ team.name }}</div>
+                {% if team.robots %}
+                <div class="admin-sub-event-robots">{{ team.robots }}</div>
+                {% endif %}
+            </div>
+            {% if team.is_winner %}
+            <span class="admin-sub-event-winner">&check;</span>
+            {% endif %}
+        </div>
+        {% endfor %}
+    </div>
+    <div class="admin-bracket-actions">
+        {% if matchup.action_href %}
+        <a href="{{ matchup.action_href }}" class="{{ matchup.action_class }}">{{ matchup.action_label }}</a>
+        {% elif matchup.action_label %}
+        <span class="{{ matchup.action_class }}">{{ matchup.action_label }}</span>
+        {% endif %}
+    </div>
+</article>

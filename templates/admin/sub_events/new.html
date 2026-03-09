@@ -1,0 +1,41 @@
+{% extends "admin/base.html" %}
+{% import "admin/partials/macros.html" as admin %}
+
+{% block admin_content %}
+<section>
+    <a href="/admin/events/{{ event.id }}" class="btn btn-sm btn-secondary admin-back-link">&larr; Event</a>
+    {% include "admin/partials/alerts.html" %}
+
+    {% call admin.card('New Sub-event') %}
+    <form method="post" action="{{ form_action }}">
+        <div class="form-group">
+            <label for="name">Sub-event Name</label>
+            <input id="name" name="name" type="text" class="form-control" placeholder="e.g. 2v2 Team Brawl" required autofocus>
+        </div>
+        <div class="form-group">
+            <label for="format">Format</label>
+            <select id="format" name="format" class="form-control">
+                <option value="2v2_team_bracket">2v2 Team Bracket</option>
+            </select>
+        </div>
+        <div class="admin-form-actions">
+            <button type="submit" class="btn btn-primary">Create Sub-event</button>
+            <a href="{{ cancel_href }}" class="btn btn-secondary">Cancel</a>
+        </div>
+    </form>
+    {% endcall %}
+
+    {% call admin.card('Eligible Robot Pool (' ~ eligible_robot_count ~ ')') %}
+    <p class="admin-helper-copy">Eligible robots are active robots outside the bracket plus bracket round 1 losers.</p>
+    {% if eligible_robots %}
+    <ul class="admin-sub-event-eligible-list">
+        {% for robot in eligible_robots %}
+        <li>{{ robot.robot_name }} <span>{{ robot.roboteer_name }}</span></li>
+        {% endfor %}
+    </ul>
+    {% else %}
+    <p class="empty">No eligible robots found.</p>
+    {% endif %}
+    {% endcall %}
+</section>
+{% endblock %}

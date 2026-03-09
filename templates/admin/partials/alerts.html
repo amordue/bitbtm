@@ -1,0 +1,24 @@
+{% if error_message %}
+<p class="alert alert-error">{{ error_message }}</p>
+{% endif %}
+
+{% if success_message %}
+<p class="alert alert-success">{{ success_message }}</p>
+{% endif %}
+
+{% if info_message %}
+<p class="alert alert-info">{{ info_message }}</p>
+{% endif %}
+
+{% if warning_message %}
+<div class="alert alert-error">
+    <p>{{ warning_message }}</p>
+    {% if warning_items %}
+    <ul class="admin-alert-list">
+        {% for warning_item in warning_items %}
+        <li>{{ warning_item }}</li>
+        {% endfor %}
+    </ul>
+    {% endif %}
+</div>
+{% endif %}

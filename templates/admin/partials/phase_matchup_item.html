@@ -1,0 +1,26 @@
+<li class="admin-matchup-item{% if matchup.is_bye %} is-bye{% endif %}" data-matchup-id="{{ matchup.id }}">
+    {% if matchup.show_drag_handle %}
+    <span class="admin-drag-handle" title="Drag to reorder">&#x283F;</span>
+    {% endif %}
+    <div class="admin-matchup-copy">
+        <p class="admin-matchup-title">
+            <strong>{{ matchup.robot1_name }}</strong>
+            {% if matchup.is_bye %}
+            <span class="admin-matchup-separator">&mdash; BYE</span>
+            {% else %}
+            <span class="admin-matchup-separator">vs</span>
+            <strong>{{ matchup.robot2_name }}</strong>
+            {% endif %}
+        </p>
+        <p class="admin-matchup-status{% if matchup.is_completed %} is-complete{% endif %}">{{ matchup.status_text }}</p>
+    </div>
+    <div class="admin-matchup-actions">
+        {% if matchup.score_href %}
+        <a href="{{ matchup.score_href }}" class="btn btn-sm {% if matchup.is_completed %}btn-secondary{% else %}btn-primary{% endif %}">{{ matchup.score_label }}</a>
+        {% elif matchup.complete_bye_action %}
+        <form method="post" action="{{ matchup.complete_bye_action }}" class="admin-inline-form">
+            <button type="submit" class="btn btn-sm btn-success">Complete Bye</button>
+        </form>
+        {% endif %}
+    </div>
+</li>

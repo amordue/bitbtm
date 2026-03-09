@@ -1,0 +1,54 @@
+{% extends "public/base.html" %}
+
+{% block public_content %}
+<section>
+    <h1>&#128269; Find Your Robot</h1>
+    <p class="public-subtitle">{{ event.event_name }} · {{ event.weight_class }}</p>
+
+    <div class="card">
+        <form method="get" action="/events/{{ event.id }}/lookup">
+            <div class="form-group">
+                <label for="q">Search by robot name or roboteer name</label>
+                <input
+                    type="search"
+                    id="q"
+                    name="q"
+                    class="form-control"
+                    value="{{ query }}"
+                    placeholder="e.g. Mauler or Alex…"
+                    autofocus="true"
+                >
+            </div>
+            <button class="btn btn-primary" type="submit">Search</button>
+        </form>
+    </div>
+
+    {% if results.searched %}
+        {% if results.rows %}
+        <section>
+            <p class="search-summary">{{ results.summary }}</p>
+            {% for item in results.rows %}
+            <div class="search-result-item">
+                {% if item.image_url %}
+                <img src="{{ item.image_url }}" class="robot-thumb" alt="{{ item.robot_name }}">
+                {% else %}
+                <div style="width:44px;height:44px;background:#222;border-radius:6px;flex-shrink:0;"></div>
+                {% endif %}
+                <div class="search-result-copy">
+                    <a href="{{ item.href }}" class="search-result-title">{{ item.robot_name }}</a>
+                    <div>
+                        <span class="search-result-meta">{{ item.roboteer_name }}</span>
+                        {% if item.weapon_type %}
+                        <span class="search-result-weapon"> · {{ item.weapon_type }}</span>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </section>
+        {% else %}
+        <p class="empty">{{ results.empty_message }}</p>
+        {% endif %}
+    {% endif %}
+</section>
+{% endblock %}

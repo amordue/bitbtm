@@ -1,0 +1,19 @@
+<li class="admin-matchup-item{% if row.is_completed %} is-locked{% endif %}" data-ro-id="{{ row.id }}">
+    {% if row.is_completed %}
+    <span class="admin-drag-placeholder"></span>
+    {% else %}
+    <span class="admin-drag-handle" title="Drag to reorder">⠿</span>
+    {% endif %}
+    <div class="admin-matchup-copy">
+        <p class="admin-matchup-title">
+            <span class="{{ row.context_class }}">{{ row.context_label }}</span>
+            {% if row.secondary_label %}
+            <span class="admin-sub-event-inline-label">[{{ row.secondary_label }}]</span>
+            {% endif %}
+            <strong>{{ row.left_name }}</strong>
+            <span class="admin-matchup-separator">{% if row.has_opponent %}vs{% else %}&mdash;{% endif %}</span>
+            <strong>{{ row.right_name }}</strong>
+        </p>
+    </div>
+    <span class="admin-matchup-status{% if row.is_completed %} is-complete{% endif %}">{{ row.status_label }}</span>
+</li>

@@ -1,0 +1,42 @@
+{% macro card(title=None, actions=None, classes='') -%}
+<section class="card admin-card{% if classes %} {{ classes }}{% endif %}">
+    {% if title or actions %}
+    <div class="admin-card-header">
+        <div class="admin-card-heading">
+            {% if title %}<h2>{{ title }}</h2>{% endif %}
+        </div>
+        {% if actions %}
+        <div class="admin-card-actions">{{ actions | safe }}</div>
+        {% endif %}
+    </div>
+    {% endif %}
+    {{ caller() }}
+</section>
+{%- endmacro %}
+
+{% macro table(headers, rows, empty_message) -%}
+    {% if rows %}
+    <div class="table-wrap">
+        <table>
+            <thead>
+                <tr>
+                    {% for header in headers %}
+                    <th>{{ header }}</th>
+                    {% endfor %}
+                </tr>
+            </thead>
+            <tbody>
+                {{ caller() }}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <p class="empty">{{ empty_message }}</p>
+    {% endif %}
+{%- endmacro %}
+
+{% macro action_form(action, label, button_class='btn btn-sm btn-secondary') -%}
+<form method="post" action="{{ action }}" class="admin-inline-form">
+    <button type="submit" class="{{ button_class }}">{{ label | safe }}</button>
+</form>
+{%- endmacro %}

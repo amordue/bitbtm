@@ -1,0 +1,35 @@
+<section
+    id="{{ next_up_panel.id }}"
+    class="{{ next_up_panel.class_name }}"
+    {% if next_up_panel.hx_get %}hx-get="{{ next_up_panel.hx_get }}"{% endif %}
+    {% if next_up_panel.hx_trigger %}hx-trigger="{{ next_up_panel.hx_trigger }}"{% endif %}
+    {% if next_up_panel.hx_swap %}hx-swap="{{ next_up_panel.hx_swap }}"{% endif %}
+>
+    <h1>Next Up Board</h1>
+    <p class="public-subtitle">{{ event.event_name }} · unified fight order</p>
+    <div class="queue-list">
+        {% if queue_items %}
+            {% for item in queue_items %}
+            <div class="queue-item{% if item.current %} current{% endif %}">
+                <div class="queue-slot">Slot {{ item.slot_number }}</div>
+                <div class="queue-title">
+                    {% if item.robot1_href %}
+                        {% if item.robot2_href %}
+                        <span><a href="{{ item.robot1_href }}" class="queue-title-link">{{ item.robot1_name }}</a> vs <a href="{{ item.robot2_href }}" class="queue-title-link">{{ item.robot2_name }}</a></span>
+                        {% else %}
+                        <span><a href="{{ item.robot1_href }}" class="queue-title-link">{{ item.robot1_name }}</a> receives a bye</span>
+                        {% endif %}
+                    {% elif item.href %}
+                    <a href="{{ item.href }}" class="queue-title-link">{{ item.title }}</a>
+                    {% else %}
+                    <span>{{ item.title }}</span>
+                    {% endif %}
+                </div>
+                <div class="queue-meta">{{ item.type_label }} · {{ item.meta }}</div>
+            </div>
+            {% endfor %}
+        {% else %}
+        <p class="empty">No pending fights in the run order.</p>
+        {% endif %}
+    </div>
+</section>

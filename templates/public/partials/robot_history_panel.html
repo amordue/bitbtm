@@ -1,0 +1,35 @@
+<section
+    id="{{ history_panel.id }}"
+    class="{{ history_panel.class_name }}"
+    {% if history_panel.hx_get %}hx-get="{{ history_panel.hx_get }}"{% endif %}
+    {% if history_panel.hx_trigger %}hx-trigger="{{ history_panel.hx_trigger }}"{% endif %}
+    {% if history_panel.hx_swap %}hx-swap="{{ history_panel.hx_swap }}"{% endif %}
+>
+    <a href="{{ back_href }}" class="btn btn-sm btn-secondary" style="margin-bottom:1.2rem;display:inline-block;">&lt;- Back to robot</a>
+    <h1>{{ robot_name }} history</h1>
+    <p class="public-subtitle">{{ roboteer_name }} · completed results only</p>
+    <div class="stack">
+        {% if history_items %}
+            {% for item in history_items %}
+            <div class="history-item">
+                <div class="history-meta">
+                    <span class="badge badge-pending">{{ item.meta }}</span>
+                    <span style="color:#666;font-size:0.78rem;text-transform:uppercase;letter-spacing:0.06em;">{{ item.kind_label }}</span>
+                </div>
+                <div class="history-title">
+                    {% if item.href %}
+                    <a href="{{ item.href }}">{{ item.title }}</a>
+                    {% else %}
+                    <span style="font-weight:700;">{{ item.title }}</span>
+                    {% endif %}
+                    <span class="history-score">{{ item.score }}</span>
+                </div>
+                <p style="color:#8d8d8d;margin-top:0.45rem;">{{ item.detail }}</p>
+                <p style="color:{{ item.outcome_color }};font-weight:700;margin-top:0.55rem;">{{ item.outcome }}</p>
+            </div>
+            {% endfor %}
+        {% else %}
+        <p class="empty">No completed fight history yet.</p>
+        {% endif %}
+    </div>
+</section>

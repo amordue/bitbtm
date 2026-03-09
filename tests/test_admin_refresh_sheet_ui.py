@@ -11,7 +11,7 @@ import database
 from app import app
 from auth import require_organizer
 from database import get_db
-from models import Base, Event, EventStatus, Robot, User
+from models import Base, Event, EventRobot, EventStatus, ImageSource, Robot, Roboteer, User
 
 
 class AdminRefreshSheetUiTests(unittest.TestCase):
@@ -108,6 +108,96 @@ class AdminRefreshSheetUiTests(unittest.TestCase):
         )
         self.assertIn(
             f'action="/admin/events/{self.ids["event_id"]}/refresh-sheet"',
+            response.text,
+        )
+
+    def test_import_preview_returns_fragment_form(self):
+        registration = {
+            "sheet_row_id": "sheet123:2",
+            "roboteer_name": "Alex Mordue",
+            "robot_name": "Saw Loser",
+            "weapon_type": "Hammer-Saw",
+            "image_url": "https://drive.google.com/open?id=file123",
+        }
+
+        with patch("routes.admin.get_valid_access_token", return_value="token-abc"), patch(
+            "routes.admin.fetch_sheet_rows",
+            return_value=[{"Robot Name": "Saw Loser"}],
+        ), patch(
+            "routes.admin.load_registrations",
+            return_value=("sheet123", [registration]),
+        ):
+            response = self.client.get(
+                f"/admin/events/{self.ids['event_id']}/import/preview",
+                params={"sheet_url": "https://docs.google.com/spreadsheets/d/sheet123/edit#gid=0"},
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(f'action="/admin/events/{self.ids["event_id"]}/import"', response.text)
+        self.assertIn("Import Selected", response.text)
+        self.assertIn("1 registrations found.", response.text)
+        self.assertIn("Saw Loser", response.text)
+        self.assertNotIn("BitBT Admin", response.text)
+
+    def test_add_robot_form_renders_manual_roster_controls(self):
+        response = self.client.get(f"/admin/events/{self.ids['event_id']}/robots/add")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("Add Robot Manually", response.text)
+        self.assertIn(f'action="/admin/events/{self.ids["event_id"]}/robots/add"', response.text)
+        self.assertIn("Designate as reserve", response.text)
+
+    def test_retire_form_without_phases_shows_info_message(self):
+        with self.testing_session_local() as db:
+            roboteer = Roboteer(roboteer_name="Jamie Driver")
+            db.add(roboteer)
+            db.flush()
+
+            robot = Robot(robot_name="Clamp Champ", roboteer_id=roboteer.id)
+            db.add(robot)
+            db.flush()
+
+            event_robot = EventRobot(event_id=self.ids["event_id"], robot_id=robot.id, is_reserve=False)
+            db.add(event_robot)
+            db.commit()
+            entry_id = event_robot.id
+
+        response = self.client.get(
+            f"/admin/events/{self.ids['event_id']}/robots/{entry_id}/retire"
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("Retirement can only be recorded once qualifying phases have been created", response.text)
+        self.assertNotIn("Confirm Retirement", response.text)
+
+    def test_upload_image_form_shows_existing_image(self):
+        with self.testing_session_local() as db:
+            roboteer = Roboteer(roboteer_name="Taylor Builder")
+            db.add(roboteer)
+            db.flush()
+
+            robot = Robot(
+                robot_name="Photo Finish",
+                roboteer_id=roboteer.id,
+                image_url="https://example.com/photo-finish.jpg",
+                image_source=ImageSource.sheet,
+            )
+            db.add(robot)
+            db.flush()
+
+            db.add(EventRobot(event_id=self.ids["event_id"], robot_id=robot.id, is_reserve=False))
+            db.commit()
+            robot_id = robot.id
+
+        response = self.client.get(
+            f"/admin/events/{self.ids['event_id']}/robots/{robot_id}/upload-image"
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("Current image:", response.text)
+        self.assertIn("https://example.com/photo-finish.jpg", response.text)
+        self.assertIn(
+            f'action="/admin/events/{self.ids["event_id"]}/robots/{robot_id}/upload-image"',
             response.text,
         )
 

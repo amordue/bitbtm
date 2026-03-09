@@ -2,71 +2,29 @@
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
-from fasthtml.common import (
-    A,
-    Div,
-    H1,
-    P,
-)
 from sqlalchemy.orm import Session
 
 from auth import exchange_code_for_tokens, get_authorization_url, get_user_info, upsert_user
 from database import get_db
-from ui import page_response
+from ui import render_template
 
 router = APIRouter()
 
-_LOGIN_CSS = """
-body {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-.card {
-    background: #1e1e1e;
-    border: 1px solid #333;
-    border-radius: 12px;
-    padding: 2.5rem 3rem;
-    text-align: center;
-    max-width: 380px;
-    width: 100%;
-}
-h1 { font-size: 2.4rem; letter-spacing: -1px; margin-bottom: 0.4rem; }
-.subtitle { color: #888; margin-bottom: 2rem; font-size: 0.95rem; }
-.btn-google {
-    display: inline-block;
-    background: #fff;
-    color: #333;
-    padding: 0.75rem 1.5rem;
-    border-radius: 6px;
-    text-decoration: none;
-    font-weight: 600;
-    font-size: 0.95rem;
-    transition: background 0.15s;
-}
-.btn-google:hover { background: #e8e8e8; }
-.error { color: #f87171; margin-bottom: 1rem; font-size: 0.9rem; }
-"""
-
 
 @router.get("/login", response_class=HTMLResponse)
-def login_page(error: str = ""):
+def login_page(request: Request, error: str = ""):
     """Render the Sign-in page."""
-    error_el = P(
-        "Sign-in failed. Please try again.",
-        cls="error",
-    ) if error else ""
-
-    return page_response(
-        "Sign In",
-        Div(
-            H1("⚙ BitBT"),
-            P("Robot Combat Tournament Manager", cls="subtitle"),
-            error_el,
-            A("Sign in with Google", href="/auth/google", cls="btn-google"),
-            cls="card",
-        ),
-        css=_LOGIN_CSS,
+    return render_template(
+        request,
+        "auth/login.html",
+        title="Sign In",
+        context={
+            "error_message": "Sign-in failed. Please try again." if error else "",
+            "success_message": "",
+            "info_message": "",
+        },
+        stylesheets=("css/auth.css",),
+        body_class="auth-page",
     )
 
 

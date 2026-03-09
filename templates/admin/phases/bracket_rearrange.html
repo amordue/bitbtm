@@ -1,0 +1,35 @@
+{% extends "admin/base.html" %}
+
+{% block admin_content %}
+<section>
+    <a href="/admin/events/{{ event.id }}/bracket" class="btn btn-sm btn-secondary admin-back-link">&larr; Bracket</a>
+    {% include "admin/partials/alerts.html" %}
+
+    <section class="card admin-card">
+        <h1>Rearrange Round 1</h1>
+        <p class="admin-helper-copy">Select two matchups to swap their lower-seeded robot (robot 2). This lets you adjust the bracket draw before fights begin.</p>
+        <form method="post" action="{{ submit_action }}">
+            <div class="form-group">
+                <label for="matchup_a">Matchup A</label>
+                <select id="matchup_a" name="matchup_a" class="form-control" required>
+                    {% for option in matchup_options %}
+                    <option value="{{ option.value }}">{{ option.label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="matchup_b">Matchup B</label>
+                <select id="matchup_b" name="matchup_b" class="form-control" required>
+                    {% for option in matchup_options %}
+                    <option value="{{ option.value }}">{{ option.label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="admin-form-actions">
+                <button type="submit" class="btn btn-primary">Swap Robot 2s</button>
+                <a href="/admin/events/{{ event.id }}/bracket" class="btn btn-secondary">Cancel</a>
+            </div>
+        </form>
+    </section>
+</section>
+{% endblock %}

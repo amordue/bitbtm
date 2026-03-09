@@ -1,0 +1,65 @@
+{% extends "public/base.html" %}
+
+{% block public_content %}
+<section>
+    <a href="/events/{{ event.id }}/sub-events" class="btn btn-secondary btn-sm" style="margin-bottom:1.2rem;display:inline-block;">← Sub-events</a>
+    <h1>{{ sub_event.name }}</h1>
+    <p class="public-subtitle">
+        <span style="color:#888;font-size:0.85rem;">{{ sub_event.format }}</span>
+        <span style="color:#444;"> · </span>
+        <span class="badge badge-{{ sub_event.status }}">{{ sub_event.status }}</span>
+    </p>
+    <div class="card">
+        <h2>Teams</h2>
+        {% if teams %}
+        <div class="table-wrap">
+            <table>
+                <thead><tr><th>Team</th><th>Robot 1</th><th>Robot 2</th></tr></thead>
+                <tbody>
+                    {% for team in teams %}
+                    <tr>
+                        <td style="font-weight:600;">{{ team.team_name }}</td>
+                        <td>{% if team.robot1.image_url %}<img src="{{ team.robot1.image_url }}" class="robot-thumb" alt="{{ team.robot1.name }}" style="width:32px;height:32px;"> {% endif %}<a href="{{ team.robot1.href }}">{{ team.robot1.name }}</a></td>
+                        <td>{% if team.robot2.image_url %}<img src="{{ team.robot2.image_url }}" class="robot-thumb" alt="{{ team.robot2.name }}" style="width:32px;height:32px;"> {% endif %}<a href="{{ team.robot2.href }}">{{ team.robot2.name }}</a></td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <p class="empty">Teams not yet assigned.</p>
+        {% endif %}
+    </div>
+    <div class="card">
+        <h2>Bracket</h2>
+        {% if bracket.rounds %}
+            {% for round in bracket.rounds %}
+            <p class="round-header">{{ round.label }}</p>
+                {% for matchup in round.matchups %}
+                <div style="display:flex;border:1px solid #2a2a2a;border-radius:6px;margin-bottom:0.5rem;overflow:hidden;background:#161616;">
+                    <div style="flex:1;">
+                        {% for team in matchup.teams %}
+                        <div style="display:flex;align-items:center;padding:0.35rem 0.5rem;border-radius:4px;{% if team.is_winner %}background:#1f3a1f;{% endif %}">
+                            {% if team.name == 'TBD' %}
+                            <span style="color:#555;font-style:italic;">TBD</span>
+                            {% else %}
+                            <span style="font-weight:600;">{{ team.name }}</span>
+                            <span style="color:#666;font-size:0.78rem;"> ({{ team.robots }})</span>
+                            {% endif %}
+                            {% if team.is_winner %}<span style="margin-left:auto;color:#4ade80;font-weight:700;"> ✓</span>{% endif %}
+                        </div>
+                        {% if not loop.last %}<div style="border-top:1px solid #222;margin:0 0.5rem;"></div>{% endif %}
+                        {% endfor %}
+                    </div>
+                    <div style="padding:0.5rem;align-self:center;">
+                        <span style="{% if matchup.status == 'completed' %}color:#4ade80;{% else %}color:#374151;{% endif %}">{% if matchup.status == 'completed' %}●{% else %}○{% endif %}</span>{% if matchup.is_bye %}<span style="color:#555;font-size:0.75rem;"> BYE</span>{% endif %}
+                    </div>
+                </div>
+                {% endfor %}
+            {% endfor %}
+        {% else %}
+        <p class="empty">Bracket not yet generated.</p>
+        {% endif %}
+    </div>
+</section>
+{% endblock %}

@@ -1,0 +1,82 @@
+<section
+    id="{{ robot_panel.id }}"
+    class="{{ robot_panel.class_name }}"
+    {% if robot_panel.hx_get %}hx-get="{{ robot_panel.hx_get }}"{% endif %}
+    {% if robot_panel.hx_trigger %}hx-trigger="{{ robot_panel.hx_trigger }}"{% endif %}
+    {% if robot_panel.hx_swap %}hx-swap="{{ robot_panel.hx_swap }}"{% endif %}
+>
+    <a href="{{ back_href }}" class="btn btn-sm btn-secondary" style="margin-bottom:1.2rem;display:inline-block;">&lt;- Robot lookup</a>
+    <div class="robot-detail-hero">
+        <div class="robot-detail-copy">
+            <h1>{{ robot.robot_name }}</h1>
+            <p class="public-subtitle"><span style="color:#888;">{{ roboteer_name }}</span>{% if weapon_type %}<span style="color:#555;"> · {{ weapon_type }}</span>{% endif %}</p>
+            <div style="margin-bottom:0.9rem;">
+                <span style="color:#888;font-size:0.88rem;">{{ completed_fights }} fight(s) played</span>
+                <span> · </span>
+                <span style="color:#60a5fa;font-size:0.88rem;font-weight:600;">{{ total_points }} pts total</span>
+            </div>
+            <div class="robot-detail-actions">
+                <a href="{{ history_href }}" class="btn btn-sm btn-secondary">Detailed history</a>
+                <a href="{{ stats_href }}" class="btn btn-sm btn-secondary">Robot stats</a>
+            </div>
+        </div>
+        {% if display_image_url %}
+            {% if has_upload_image %}
+            <div class="robot-detail-photo-wrap">
+                <button
+                    class="robot-detail-photo-button"
+                    type="button"
+                    data-lightbox-src="{{ display_image_url }}"
+                    data-lightbox-alt="{{ robot.robot_name }} full size image"
+                    data-lightbox-caption="{{ robot.robot_name }}"
+                >
+                    <img src="{{ display_image_url }}" class="robot-detail-photo" alt="{{ robot.robot_name }}">
+                    <span class="robot-detail-photo-hint">Tap to expand</span>
+                </button>
+            </div>
+            {% else %}
+            <div class="robot-detail-photo-wrap">
+                <img src="{{ display_image_url }}" class="robot-detail-photo" alt="{{ robot.robot_name }}">
+            </div>
+            {% endif %}
+        {% endif %}
+    </div>
+    {% if has_upload_image and display_image_url %}
+    <div hidden class="robot-lightbox">
+        <div class="robot-lightbox-frame">
+            <button class="btn btn-sm robot-lightbox-close" type="button" data-lightbox-close="true">Close</button>
+            <img src="{{ display_image_url }}" class="robot-lightbox-image" alt="{{ robot.robot_name }}">
+            <p class="robot-lightbox-caption">{{ robot.robot_name }}</p>
+        </div>
+    </div>
+    {% endif %}
+    <div class="card">
+        <div class="table-wrap">
+            <table>
+                <thead>
+                    <tr><th>Phase</th><th>Opponent</th><th>Pts</th><th>Result</th></tr>
+                </thead>
+                <tbody>
+                    {% if fight_rows %}
+                        {% for row in fight_rows %}
+                        <tr class="{{ row.row_class }}">
+                            <td><span class="badge badge-{{ row.phase_badge }}" title="{{ row.phase_full }}">{{ row.phase_label }}</span></td>
+                            <td>
+                                {% if row.opponent_href %}
+                                <a href="{{ row.opponent_href }}">{{ row.opponent_name }}</a>
+                                {% else %}
+                                <span style="color:#555;font-style:italic;">{{ row.opponent_name }}</span>
+                                {% endif %}
+                            </td>
+                            <td><span style="{{ row.points_style }}">{{ row.points }}</span></td>
+                            <td><span style="color:#888;font-size:0.82rem;">{{ row.result_label }}</span></td>
+                        </tr>
+                        {% endfor %}
+                    {% else %}
+                    <tr><td colspan="4" class="empty">No fights scheduled yet.</td></tr>
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</section>

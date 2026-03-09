@@ -1,0 +1,25 @@
+{% extends "public/base.html" %}
+
+{% block public_content %}
+<section>
+    <h1>&#9876; Sub-events</h1>
+    <p class="public-subtitle">{{ event.event_name }} · {{ event.weight_class }}</p>
+    {% if sub_events %}
+        {% for item in sub_events %}
+        <div class="card">
+            <h2><a href="{{ item.href }}">{{ item.name }}</a></h2>
+            <p style="margin:0.3rem 0 0.75rem;">
+                <span style="color:#888;font-size:0.85rem;">{{ item.format }}</span>
+                <span style="color:#444;"> · </span>
+                <span style="color:#888;font-size:0.85rem;">{{ item.team_count }} team(s)</span>
+                <span style="color:#444;"> · </span>
+                <span class="badge badge-{{ item.status }}">{{ item.status }}</span>
+            </p>
+            <a href="{{ item.href }}" class="btn btn-secondary btn-sm">View bracket &amp; teams →</a>
+        </div>
+        {% endfor %}
+    {% else %}
+    <div class="card"><p class="empty">No sub-events have been created for this tournament yet.</p></div>
+    {% endif %}
+</section>
+{% endblock %}
