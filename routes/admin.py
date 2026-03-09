@@ -106,6 +106,7 @@ from models import (
 )
 from scoring import BYE_POINTS, FIGHT_OUTCOMES, outcome_to_points, points_to_outcome_label
 from ui import HTMX_SCRIPT_URL, page_response, status_badge
+from robot_images import robot_display_image_url
 
 router = APIRouter(prefix="/admin")
 
@@ -724,8 +725,9 @@ def _robot_roster_row(
     reer: Roboteer = robot.roboteer
 
     thumb = ""
-    if robot.image_url:
-        thumb = Img(src=robot.image_url, cls="robot-thumb", alt=robot.robot_name)
+    img_url = robot_display_image_url(robot)
+    if img_url:
+        thumb = Img(src=img_url, cls="robot-thumb", alt=robot.robot_name)
 
     # Actions
     actions = [

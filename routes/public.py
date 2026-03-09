@@ -73,6 +73,7 @@ from public_data import (
     robot_stats as _robot_stats,
     robot_sub_event_history as _robot_sub_event_history,
 )
+from robot_images import robot_display_image_url, robot_has_uploaded_image
 from scoring import BYE_POINTS
 from ui import HTMX_SCRIPT_URL, page_response, status_badge
 
@@ -815,31 +816,44 @@ def _render_robot_fights_panel(ev: Event, robot: Robot, db: Session) -> Div:
             cls=row_cls,
         ))
 
+    display_url = robot_display_image_url(robot)
+    has_upload = robot_has_uploaded_image(robot)
+
     thumb = ""
-    if robot.image_url:
-        thumb = Div(
-            Button(
+    if display_url:
+        if has_upload:
+            thumb = Div(
+                Button(
+                    Img(
+                        src=display_url,
+                        cls="robot-detail-photo",
+                        alt=robot.robot_name,
+                    ),
+                    Span("Tap to expand", cls="robot-detail-photo-hint"),
+                    cls="robot-detail-photo-button",
+                    type="button",
+                    data_lightbox_src=display_url,
+                    data_lightbox_alt=f"{robot.robot_name} full size image",
+                    data_lightbox_caption=robot.robot_name,
+                ),
+                cls="robot-detail-photo-wrap",
+            )
+        else:
+            thumb = Div(
                 Img(
-                    src=robot.image_url,
+                    src=display_url,
                     cls="robot-detail-photo",
                     alt=robot.robot_name,
                 ),
-                Span("Tap to expand", cls="robot-detail-photo-hint"),
-                cls="robot-detail-photo-button",
-                type="button",
-                data_lightbox_src=robot.image_url,
-                data_lightbox_alt=f"{robot.robot_name} full size image",
-                data_lightbox_caption=robot.robot_name,
-            ),
-            cls="robot-detail-photo-wrap",
-        )
+                cls="robot-detail-photo-wrap",
+            )
 
     lightbox = ""
-    if robot.image_url:
+    if has_upload and display_url:
         lightbox = Div(
             Div(
                 Button("Close", cls="btn btn-sm robot-lightbox-close", type="button", data_lightbox_close="true"),
-                Img(src=robot.image_url, cls="robot-lightbox-image", alt=robot.robot_name),
+                Img(src=display_url, cls="robot-lightbox-image", alt=robot.robot_name),
                 P(robot.robot_name, cls="robot-lightbox-caption"),
                 cls="robot-lightbox-frame",
             ),
@@ -904,7 +918,8 @@ def _render_leaderboard_panel(ev: Event, db: Session) -> Div:
         for i, row in enumerate(rows, start=1):
             rank_cls = f"rank-{i}" if i <= 3 else ""
             robot = row["robot"]
-            thumb = Img(src=robot.image_url, cls="robot-thumb", alt=robot.robot_name) if robot.image_url else ""
+            img_url = robot_display_image_url(robot)
+            thumb = Img(src=img_url, cls="robot-thumb", alt=robot.robot_name) if img_url else ""
             table_rows.append(Tr(
                 Td(Span(str(i), cls=rank_cls)),
                 Td(thumb),
@@ -1003,8 +1018,9 @@ def _render_live_panel(ev: Event, db: Session) -> Div:
             meta_parts.append(robot.weapon_type)
         meta_text = " · ".join(meta_parts) if meta_parts else fallback_meta
 
-        if robot and robot.image_url:
-            media = Img(src=robot.image_url, cls="live-robot-photo", alt=robot.robot_name)
+        display_url = robot_display_image_url(robot)
+        if display_url:
+            media = Img(src=display_url, cls="live-robot-photo", alt=(robot.robot_name if robot else name))
         else:
             initial = (name[:1] if name else "?").upper()
             media = Div(initial, cls="live-robot-photo-placeholder")
@@ -1304,9 +1320,10 @@ def robot_lookup(
             items = []
             for er in matched_ers:
                 robot: Robot = er.robot
+                img_url = robot_display_image_url(robot)
                 thumb = (
-                    Img(src=robot.image_url, cls="robot-thumb", alt=robot.robot_name)
-                    if robot.image_url
+                    Img(src=img_url, cls="robot-thumb", alt=robot.robot_name)
+                    if img_url
                     else Div(style="width:44px;height:44px;background:#222;border-radius:6px;flex-shrink:0;")
                 )
                 items.append(
@@ -1785,13 +1802,15 @@ def sub_event_public(
     if teams:
         team_rows = []
         for t in teams:
+            r1_url = robot_display_image_url(t.robot1)
+            r2_url = robot_display_image_url(t.robot2)
             r1_thumb = (
-                Img(src=t.robot1.image_url, cls="robot-thumb", alt=t.robot1.robot_name, style="width:32px;height:32px;")
-                if t.robot1.image_url else ""
+                Img(src=r1_url, cls="robot-thumb", alt=t.robot1.robot_name, style="width:32px;height:32px;")
+                if r1_url else ""
             )
             r2_thumb = (
-                Img(src=t.robot2.image_url, cls="robot-thumb", alt=t.robot2.robot_name, style="width:32px;height:32px;")
-                if t.robot2.image_url else ""
+                Img(src=r2_url, cls="robot-thumb", alt=t.robot2.robot_name, style="width:32px;height:32px;")
+                if r2_url else ""
             )
             team_rows.append(Tr(
                 Td(t.team_name, style="font-weight:600;"),

@@ -17,3 +17,13 @@ bitbt.db
 
 # Image Uploads
 static/uploads/
+
+# Skip any generated csvs
+*.csv
+
+# Ignore vscode settings
+.vscode/.settings
+.vscode/launch.json
+.vscode/tasks.json
+.vscode/extensions.json
+.vscode/settings.json

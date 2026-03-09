@@ -432,6 +432,152 @@ class Phase6PublicViewsTests(unittest.TestCase):
         ):
             self.assertNotIn('hx-trigger="load, every ', response.text)
 
+    # ------------------------------------------------------------------
+    # Fallback archetype images
+    # ------------------------------------------------------------------
+
+    def test_robot_detail_shows_fallback_archetype_image_without_lightbox(self):
+        """Robot with weapon_type but no image_url gets archetype art, no lightbox."""
+        # Beta has weapon_type="Hammer" and no image_url
+        with self.testing_session_local() as db:
+            beta = db.query(Robot).filter(Robot.robot_name == "Beta").one()
+            beta_id = beta.id
+
+        response = self.client.get(f"/events/{self.ids['event_id']}/robot/{beta_id}")
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('/static/robot-archetypes/hammer.svg', response.text)
+        self.assertIn('class="robot-detail-photo"', response.text)
+        # No lightbox for fallback art
+        self.assertNotIn('class="robot-lightbox"', response.text)
+
+    def test_robot_detail_uploaded_image_still_has_lightbox(self):
+        """Robot with real image_url still gets the lightbox treatment."""
+        response = self.client.get(
+            f"/events/{self.ids['event_id']}/robot/{self.ids['alpha_id']}"
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('data-lightbox-src="https://example.com/alpha.png"', response.text)
+        self.assertIn('class="robot-lightbox"', response.text)
+
+    def test_leaderboard_uses_fallback_thumbnails(self):
+        """Leaderboard thumbnails show archetype images for robots without photos."""
+        response = self.client.get(f"/events/{self.ids['event_id']}/leaderboard")
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('/static/robot-archetypes/hammer.svg', response.text)
+        self.assertIn('/static/robot-archetypes/drum-spinner.svg', response.text)
+
+    def test_live_display_uses_fallback_images(self):
+        """Live display cards show archetype images instead of initial-letter placeholders."""
+        response = self.client.get(f"/events/{self.ids['event_id']}/live")
+        self.assertEqual(response.status_code, 200)
+        # Gamma (Lifter, no image_url) should get fallback art
+        self.assertIn('/static/robot-archetypes/lifter.svg', response.text)
+        self.assertIn('class="live-robot-photo"', response.text)
+
+    def test_lookup_uses_fallback_thumbnails(self):
+        """Robot lookup results show archetype thumbnails for robots without photos."""
+        response = self.client.get(
+            f"/events/{self.ids['event_id']}/lookup",
+            params={"q": "Beta"},
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('/static/robot-archetypes/hammer.svg', response.text)
+
+    def test_sub_event_team_roster_uses_fallback_thumbnails(self):
+        """Sub-event team roster shows archetype thumbnails for image-less robots."""
+        with self.testing_session_local() as db:
+            se = db.query(SubEvent).filter(SubEvent.name == "Duo Mayhem").one()
+            se_id = se.id
+
+        response = self.client.get(
+            f"/events/{self.ids['event_id']}/sub-events/{se_id}"
+        )
+        self.assertEqual(response.status_code, 200)
+        # Beta (Hammer) and Delta (Drum) are on Iron Pair team, no uploaded images
+        self.assertIn('/static/robot-archetypes/hammer.svg', response.text)
+        self.assertIn('/static/robot-archetypes/drum-spinner.svg', response.text)
+
+    def test_tbd_bye_slots_do_not_show_archetype_art(self):
+        """TBD/BYE slots should show placeholder, not archetype images."""
+        response = self.client.get(f"/events/{self.ids['event_id']}/live")
+        self.assertEqual(response.status_code, 200)
+        # The "BYE" side should NOT have a robot-archetypes path
+        # (only real Robot records get fallback art)
+        self.assertNotIn('/static/robot-archetypes/generic.svg" class="live-robot-photo-placeholder"', response.text)
+
+
+class TestNormalizeWeaponType(unittest.TestCase):
+    """Unit tests for weapon_type → archetype alias normalization."""
+
+    def test_known_types(self):
+        from robot_images import normalize_weapon_type
+
+        cases = {
+            "Vertical spinner": "vertical-spinner",
+            "vertical spinner": "vertical-spinner",
+            "Hammer": "hammer",
+            "Lifter": "lifter",
+            "Drum": "drum-spinner",
+            "drum spinner": "drum-spinner",
+            "Flipper": "flipper",
+            "Horizontal spinner": "horizontal-spinner",
+            "Saw": "saw",
+            "Grabber": "grabber",
+            "Cluster": "cluster",
+            "Rammer": "rammer",
+            "Wedge": "rammer",
+            "Spinner": "vertical-spinner",
+            "Hammer-Saw": "saw",
+        }
+        for weapon, expected in cases.items():
+            with self.subTest(weapon=weapon):
+                self.assertEqual(normalize_weapon_type(weapon), expected)
+
+    def test_unknown_falls_back_to_generic(self):
+        from robot_images import normalize_weapon_type
+
+        self.assertEqual(normalize_weapon_type("Laser cannon"), "generic")
+        self.assertEqual(normalize_weapon_type("???"), "generic")
+
+    def test_none_and_empty(self):
+        from robot_images import normalize_weapon_type
+
+        self.assertEqual(normalize_weapon_type(None), "generic")
+        self.assertEqual(normalize_weapon_type(""), "generic")
+
+    def test_messy_whitespace_and_punctuation(self):
+        from robot_images import normalize_weapon_type
+
+        self.assertEqual(normalize_weapon_type("  VERTICAL   SPINNER  "), "vertical-spinner")
+        self.assertEqual(normalize_weapon_type("hammer--saw"), "saw")
+
+
+class TestRobotDisplayImageUrl(unittest.TestCase):
+    """Unit tests for robot_display_image_url priority logic."""
+
+    def test_none_robot_returns_none(self):
+        from robot_images import robot_display_image_url
+
+        self.assertIsNone(robot_display_image_url(None))
+
+    def test_uploaded_image_takes_priority(self):
+        from robot_images import robot_display_image_url
+
+        robot = Robot(robot_name="Test", weapon_type="Hammer", image_url="https://example.com/test.png")
+        self.assertEqual(robot_display_image_url(robot), "https://example.com/test.png")
+
+    def test_weapon_type_maps_to_archetype(self):
+        from robot_images import robot_display_image_url
+
+        robot = Robot(robot_name="Test", weapon_type="Drum")
+        self.assertEqual(robot_display_image_url(robot), "/static/robot-archetypes/drum-spinner.svg")
+
+    def test_no_weapon_type_returns_generic(self):
+        from robot_images import robot_display_image_url
+
+        robot = Robot(robot_name="Test")
+        self.assertEqual(robot_display_image_url(robot), "/static/robot-archetypes/generic.svg")
+
 
 if __name__ == "__main__":
     unittest.main()
